@@ -1,0 +1,97 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { supabase } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
+import { Mail, Lock, ArrowRight } from 'lucide-react'
+
+export default function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
+      if (data.user && data.session) {
+        // Store session token in cookie for middleware
+        document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=3600`
+        toast.success('Welcome back!')
+        router.push('/')
+        router.refresh()
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to login')
+      setPassword('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E]" style={{ padding: '28px' }}>
+      <h2 className="text-xl font-bold text-[#FFFFFF]" style={{ marginBottom: '24px' }}>Login to BeBusy</h2>
+      
+      <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="relative">
+          <Mail className="absolute h-5 w-5 text-[#8E8E93]" style={{ left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full bg-[#000000] border border-[#2C2C2E] rounded-[12px] text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-[#10B981] transition-colors"
+            style={{ paddingLeft: '48px', paddingRight: '16px', paddingTop: '14px', paddingBottom: '14px' }}
+            placeholder="you@example.com"
+          />
+        </div>
+
+        <div className="relative">
+          <Lock className="absolute h-5 w-5 text-[#8E8E93]" style={{ left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full bg-[#000000] border border-[#2C2C2E] rounded-[12px] text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-[#10B981] transition-colors"
+            style={{ paddingLeft: '48px', paddingRight: '16px', paddingTop: '14px', paddingBottom: '14px' }}
+            placeholder="••••••••"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-[#10B981] hover:bg-[#059669] disabled:bg-[#2C2C2E] disabled:cursor-not-allowed text-white font-semibold rounded-[12px] transition-colors flex items-center justify-center gap-2"
+          style={{ paddingTop: '14px', paddingBottom: '14px', marginTop: '8px' }}
+        >
+          {loading ? 'Logging in...' : 'Login'}
+          {!loading && <ArrowRight className="h-5 w-5" />}
+        </button>
+      </form>
+
+      <div className="text-center" style={{ marginTop: '24px' }}>
+        <p className="text-[#9BA1A6]">
+          Don't have an account?{' '}
+          <Link href="/signup" className="text-[#10B981] hover:underline font-medium">
+            Sign up
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}
