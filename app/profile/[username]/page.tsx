@@ -8,7 +8,7 @@ import { fetchPosts } from '@/lib/supabase/posts'
 import { followUser, unfollowUser, isFollowing } from '@/lib/supabase/profiles'
 import { PostCard } from '@/components/PostCard'
 import { AppLayout } from '@/components/AppLayout'
-import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare, FileText, Image, Heart } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { getOrCreateConversation } from '@/lib/supabase/messages'
@@ -21,11 +21,13 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<any>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
+  const [likedPosts, setLikedPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isFollowingUser, setIsFollowingUser] = useState(false)
   const [followersCount, setFollowersCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
   const [isFollowLoading, setIsFollowLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'posts' | 'media' | 'likes'>('posts')
 
   useEffect(() => {
     loadProfile()
@@ -105,6 +107,48 @@ export default function ProfilePage() {
         setPosts(postsWithLikeStatus)
       } else {
         setPosts(postsData || [])
+      }
+
+      // Load liked posts
+      const { data: likesData } = await supabase
+        .from('likes')
+        .select(`
+          post_id,
+          posts (
+            *,
+            profiles:user_id (
+              id,
+              username,
+              full_name,
+              avatar_url,
+              role
+            ),
+            likes (
+              id,
+              user_id
+            ),
+            comments (
+              id
+            )
+          )
+        `)
+        .eq('user_id', (profileData as any).id)
+        .order('created_at', { ascending: false })
+
+      if (likesData && currentProfile) {
+        const likedPostsData = likesData
+          .map((like: any) => like.posts)
+          .filter((post: any) => post !== null)
+          .map((post: any) => ({
+            ...post,
+            is_liked: post.likes?.some((like: any) => like.user_id === currentProfile.id) || false
+          }))
+        setLikedPosts(likedPostsData)
+      } else if (likesData) {
+        const likedPostsData = likesData
+          .map((like: any) => like.posts)
+          .filter((post: any) => post !== null)
+        setLikedPosts(likedPostsData)
       }
     } catch (error) {
       console.error('Error loading profile:', error)
@@ -282,32 +326,99 @@ export default function ProfilePage() {
 
       {/* Tabs */}
       <div className="flex gap-2" style={{ marginBottom: '24px' }}>
-        <button className="flex-1 py-3 font-semibold bg-[#10B981]/10 text-[#10B981] rounded-xl transition-colors">
+        <button
+          onClick={() => setActiveTab('posts')}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'posts'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
+        >
+          <FileText className="w-4 h-4" />
           Posts
         </button>
-        <button className="flex-1 py-3 font-semibold text-[#8E8E93] bg-[#1C1C1E] rounded-xl hover:bg-[#2C2C2E] transition-colors">
+        <button
+          onClick={() => setActiveTab('media')}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'media'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
+        >
+          <Image className="w-4 h-4" />
           Media
         </button>
-        <button className="flex-1 py-3 font-semibold text-[#8E8E93] bg-[#1C1C1E] rounded-xl hover:bg-[#2C2C2E] transition-colors">
+        <button
+          onClick={() => setActiveTab('likes')}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'likes'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
+        >
+          <Heart className="w-4 h-4" />
           Likes
         </button>
       </div>
 
       {/* Posts */}
-      {posts.length === 0 ? (
-        <div className="p-12 text-center">
-          <div className="mb-4 text-5xl">📝</div>
-          <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No posts yet</h3>
-          <p className="text-[#9BA1A6]">
-            {isOwnProfile ? "You haven't posted anything yet" : "This user hasn't posted anything yet"}
-          </p>
-        </div>
-      ) : (
-        <div>
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
+      {activeTab === 'posts' && (
+        posts.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="mb-4 text-5xl">📝</div>
+            <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No posts yet</h3>
+            <p className="text-[#9BA1A6]">
+              {isOwnProfile ? "You haven't posted anything yet" : "This user hasn't posted anything yet"}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Media */}
+      {activeTab === 'media' && (
+        posts.filter(post => post.image_url || post.video_url).length === 0 ? (
+          <div className="p-12 text-center">
+            <Image className="w-16 h-16 text-[#2D2D2D] mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No media yet</h3>
+            <p className="text-[#9BA1A6]">
+              {isOwnProfile ? "You haven't posted any media yet" : "This user hasn't posted any media yet"}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {posts.filter(post => post.image_url || post.video_url).map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* Likes */}
+      {activeTab === 'likes' && (
+        likedPosts.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="mb-4 text-5xl">❤️</div>
+            <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No liked posts</h3>
+            <p className="text-[#9BA1A6]">
+              {isOwnProfile ? "You haven't liked any posts yet" : "This user hasn't liked any posts yet"}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {likedPosts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        )
       )}
     </AppLayout>
   )

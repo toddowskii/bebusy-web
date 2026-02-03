@@ -315,27 +315,29 @@ export default function PostDetailPage() {
                       )}
                     </Link>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Link href={`/profile/${comment.profiles.username}`} className="font-bold text-[#FFFFFF] hover:underline">
+                      <div className="flex items-start gap-2 mb-1 flex-wrap">
+                        <Link href={`/profile/${comment.profiles.username}`} className="font-bold text-[#FFFFFF] hover:underline truncate">
                           {comment.profiles.full_name || comment.profiles.username}
                         </Link>
-                        <Link href={`/profile/${comment.profiles.username}`} className="text-[#8E8E93] text-sm hover:underline">
+                        <Link href={`/profile/${comment.profiles.username}`} className="text-[#8E8E93] text-sm hover:underline truncate">
                           @{comment.profiles.username}
                         </Link>
-                        <span className="text-[#8E8E93]">·</span>
-                        <span className="text-[#8E8E93] text-sm">
-                          {formatDate(comment.created_at)}
-                        </span>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[#8E8E93]">·</span>
+                          <span className="text-[#8E8E93] text-sm whitespace-nowrap">
+                            {formatDate(comment.created_at)}
+                          </span>
+                        </div>
                         {currentUser?.id === comment.user_id && (
                           <button
                             onClick={() => handleDeleteComment(comment.id)}
-                            className="ml-auto p-1.5 text-[#8E8E93] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                            className="ml-auto p-1.5 text-[#8E8E93] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all flex-shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         )}
                       </div>
-                      <p className="text-[#FFFFFF] whitespace-pre-wrap break-words leading-relaxed">{comment.content}</p>
+                      <p className="text-[#FFFFFF] whitespace-pre-wrap break-words leading-relaxed text-[15px]">{comment.content}</p>
                     </div>
                   </div>
                 </div>

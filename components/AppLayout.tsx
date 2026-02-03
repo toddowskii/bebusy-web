@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Home, Users, MessageSquare, Bell, User, Target, Settings } from 'lucide-react'
+import { Home, Users, MessageSquare, Bell, User, Target, Settings, Search } from 'lucide-react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase/client'
@@ -15,6 +15,7 @@ export function AppLayout({ children, username }: AppLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [isCheckingBan, setIsCheckingBan] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     const checkBanStatus = async () => {
@@ -44,6 +45,43 @@ export function AppLayout({ children, username }: AppLayoutProps) {
     return () => clearInterval(interval)
   }, [router])
 
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_read', false)
+        .neq('sender_id', session.user.id)
+
+      setUnreadCount(count || 0)
+    }
+
+    fetchUnreadCount()
+
+    // Subscribe to message changes
+    const channel = supabase
+      .channel('unread-messages')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   if (isCheckingBan) {
     return null // or a loading spinner
   }
@@ -60,6 +98,9 @@ export function AppLayout({ children, username }: AppLayoutProps) {
           </Link>
           
           <div className="flex items-center gap-2">
+            <Link href="/search" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
+              <Search className="w-5 h-5 text-[#9BA1A6]" />
+            </Link>
             <Link href="/settings/account" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
               <Settings className="w-5 h-5 text-[#9BA1A6]" />
             </Link>
@@ -90,8 +131,15 @@ export function AppLayout({ children, username }: AppLayoutProps) {
             <Target className="w-6 h-6" />
             <span className="text-xs">Focus</span>
           </Link>
-          <Link href="/messages" className={`flex flex-col items-center gap-1 ${pathname?.startsWith('/messages') ? 'text-[#10B981]' : 'text-[#9BA1A6] hover:text-[#ECEDEE]'} transition-colors`}>
-            <MessageSquare className="w-6 h-6" />
+          <Link href="/messages" className={`flex flex-col items-center gap-1 ${pathname?.startsWith('/messages') ? 'text-[#10B981]' : 'text-[#9BA1A6] hover:text-[#ECEDEE]'} transition-colors relative`}>
+            <div className="relative">
+              <MessageSquare className="w-6 h-6" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#10B981] text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
             <span className="text-xs">Messages</span>
           </Link>
           {username ? (

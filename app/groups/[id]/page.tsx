@@ -100,78 +100,96 @@ export default function GroupDetailPage() {
 
   return (
     <AppLayout username={currentUser?.username}>
-      {/* Back Button */}
-      <div style={{ marginBottom: '24px' }}>
-        <button onClick={() => router.back()} className="flex items-center text-[#9BA1A6] hover:text-[#FFFFFF] transition-colors" style={{ gap: '8px' }}>
-          <ArrowLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">Back</span>
+      {/* Header with Back Button */}
+      <div className="flex items-center gap-3" style={{ marginBottom: '24px' }}>
+        <button onClick={() => router.back()} className="p-2 hover:bg-[#1C1C1E] rounded-full transition-colors">
+          <ArrowLeft className="w-5 h-5 text-[#ECEDEE]" />
         </button>
-      </div>
-
-      {/* Group Info */}
-      <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E]" style={{ padding: '32px', marginBottom: '24px' }}>
-        <div className="flex items-start" style={{ gap: '20px', marginBottom: '24px' }}>
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-            <Users className="w-10 h-10 text-white" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-start justify-between" style={{ marginBottom: '8px' }}>
-              <h1 className="text-2xl font-bold text-[#FFFFFF]">{group.name}</h1>
-              {isCreator && (
-                <button
-                  onClick={() => router.push(`/groups/${groupId}/edit`)}
-                  className="flex items-center border border-[#2C2C2E] rounded-[12px] hover:bg-[#252527] transition-colors text-[#FFFFFF]"
-                  style={{ padding: '8px 16px', gap: '6px' }}
-                >
-                  <Settings className="w-4 h-4" />
-                  <span className="text-sm font-medium">Edit</span>
-                </button>
-              )}
-            </div>
-            <p className="text-sm text-[#9BA1A6]">{group.group_members.length} members</p>
-          </div>
-        </div>
-
-        {group.description && (
-          <p className="text-[#ECEDEE]" style={{ marginBottom: '24px' }}>{group.description}</p>
-        )}
-
-        <div className="flex items-center text-sm text-[#8E8E93]" style={{ gap: '8px', marginBottom: '24px' }}>
-          <span>{group.group_members.length} members</span>
-          <span>·</span>
-          <span>Created by @{group.profiles.username}</span>
-        </div>
-
-        {!isCreator && (
-          <button
-            onClick={handleJoinLeave}
-            disabled={isJoining}
-            className={`w-full rounded-[12px] font-semibold transition-all ${
-              isMemberOfGroup
-                ? 'border border-[#2C2C2E] hover:bg-red-500/10 hover:border-red-500 hover:text-red-500'
-                : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-lg hover:from-green-600 hover:to-emerald-700'
-            }`}
-            style={{ paddingTop: '14px', paddingBottom: '14px', boxShadow: isMemberOfGroup ? 'none' : '0 10px 15px -3px rgba(16, 185, 129, 0.2)' }}
-          >
-            {isJoining ? '...' : isMemberOfGroup ? 'Leave Group' : 'Join Group'}
-          </button>
-        )}
-      </div>
-
-      {/* Posts */}
-      {posts.length === 0 ? (
-        <div className="p-12 text-center">
-          <div className="text-5xl" style={{ marginBottom: '16px' }}>📝</div>
-          <h3 className="text-xl font-semibold text-[#ECEDEE]" style={{ marginBottom: '8px' }}>No posts yet</h3>
-          <p className="text-[#9BA1A6]">Be the first to post in this group!</p>
-        </div>
-      ) : (
         <div>
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
+          <h2 className="text-xl font-bold text-[#ECEDEE]">{group.name}</h2>
+          <p className="text-sm text-[#8E8E93]">{group.group_members?.length || 0} members</p>
         </div>
-      )}
+      </div>
+
+      {/* Group Header Card */}
+      <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] overflow-hidden" style={{ marginBottom: '24px' }}>
+        {/* Cover/Banner */}
+        <div className="h-32 bg-gradient-to-r from-green-500/20 to-emerald-600/20 relative"></div>
+        
+        {/* Group Info */}
+        <div style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '20px' }}>
+          {/* Icon & Action */}
+          <div className="flex justify-between items-start -mt-12 mb-4">
+            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center border-4 border-[#1C1C1E] ring-2 ring-[#2C2C2E] shadow-lg">
+              <Users className="w-12 h-12 text-white" />
+            </div>
+
+            {/* Action Button */}
+            {isCreator ? (
+              <Link
+                href={`/groups/${groupId}/edit`}
+                className="mt-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] rounded-full font-semibold transition-colors text-[#ECEDEE] flex items-center gap-2"
+                style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '8px', paddingBottom: '8px' }}
+              >
+                <Settings className="w-4 h-4" />
+                Edit Group
+              </Link>
+            ) : (
+              <button
+                onClick={handleJoinLeave}
+                disabled={isJoining}
+                className={`mt-3 rounded-full font-semibold transition-all ${
+                  isMemberOfGroup
+                    ? 'bg-[#2C2C2E] hover:bg-red-500/10 hover:border hover:border-red-500 text-[#ECEDEE] hover:text-red-500'
+                    : 'bg-[#10B981] hover:bg-[#059669] text-white'
+                }`}
+                style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '8px', paddingBottom: '8px' }}
+              >
+                {isJoining ? '...' : isMemberOfGroup ? 'Leave' : 'Join'}
+              </button>
+            )}
+          </div>
+
+          {/* Name & Description */}
+          <div className="mb-3">
+            <h1 className="text-2xl font-bold text-[#FFFFFF]">{group.name}</h1>
+          </div>
+
+          {/* Description */}
+          {group.description && (
+            <p className="mb-3 text-[#ECEDEE] whitespace-pre-wrap">{group.description}</p>
+          )}
+
+          {/* Meta Info */}
+          <div className="flex flex-wrap gap-4 text-[#8E8E93] text-sm">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-4 h-4" />
+              <span>{group.group_members?.length || 0} members</span>
+            </div>
+            <span>·</span>
+            <span>Created by @{group.profiles?.username}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Posts Section */}
+      <div>
+        {posts.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-5xl mb-4">📝</div>
+            <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No posts yet</h3>
+            <p className="text-[#9BA1A6]">
+              {isMemberOfGroup ? "Be the first to post in this group!" : "Join the group to see posts"}
+            </p>
+          </div>
+        ) : (
+          <div>
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        )}
+      </div>
     </AppLayout>
   )
 }

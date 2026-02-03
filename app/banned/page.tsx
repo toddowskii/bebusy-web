@@ -45,32 +45,53 @@ export default function BannedPage() {
 
   return (
     <div className="min-h-screen bg-[#000000] flex items-center justify-center" style={{ padding: '20px' }}>
-      <div className="max-w-md w-full text-center">
-        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center">
-          <Ban className="w-12 h-12 text-red-500" />
+      <div className="max-w-md w-full">
+        {/* Ban Icon */}
+        <div className="flex justify-center" style={{ marginBottom: '48px' }}>
+          <div className="w-32 h-32 rounded-full bg-red-500/10 flex items-center justify-center animate-pulse">
+            <Ban className="w-16 h-16 text-red-500" />
+          </div>
         </div>
         
-        <h1 className="text-3xl font-bold text-[#FFFFFF] mb-4">Account Suspended</h1>
-        <p className="text-[#9BA1A6] mb-8">
-          Your account has been temporarily or permanently suspended due to violation of our community guidelines.
-        </p>
-        
-        <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] p-6 mb-6">
-          <h3 className="text-[#FFFFFF] font-semibold mb-3">Believe this is a mistake?</h3>
-          <p className="text-sm text-[#8E8E93] mb-4">
-            If you think your account was banned in error, you can submit an appeal.
-          </p>
-          <a
-            href="mailto:appeals@bebusy.app?subject=Account%20Ban%20Appeal&body=Please%20explain%20why%20you%20believe%20your%20account%20was%20banned%20in%20error."
-            className="inline-block px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#10B981] font-semibold rounded-full transition-colors"
-          >
-            Submit Appeal
-          </a>
+        {/* Main Card */}
+        <div className="bg-[#1C1C1E] rounded-[24px] border border-[#2C2C2E] overflow-hidden" style={{ marginBottom: '20px' }}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-b border-red-500/20" style={{ padding: '32px 24px' }}>
+            <h1 className="text-3xl font-bold text-[#FFFFFF] mb-3 text-center">Account Suspended</h1>
+            <p className="text-[#9BA1A6] text-center leading-relaxed">
+              Your account has been temporarily or permanently suspended due to violation of our community guidelines.
+            </p>
+          </div>
+          
+          {/* Appeal Section */}
+          <div style={{ padding: '24px' }}>
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#10B981]/10 flex items-center justify-center flex-shrink-0">
+                <span className="text-[#10B981] text-lg">?</span>
+              </div>
+              <div>
+                <h3 className="text-[#FFFFFF] font-semibold mb-2">Believe this is a mistake?</h3>
+                <p className="text-sm text-[#8E8E93] leading-relaxed">
+                  If you think your account was banned in error, you can submit an appeal to our support team.
+                </p>
+              </div>
+            </div>
+            
+            <a
+              href="mailto:appeals@bebusy.app?subject=Account%20Ban%20Appeal&body=Please%20explain%20why%20you%20believe%20your%20account%20was%20banned%20in%20error."
+              className="flex items-center justify-center gap-2 w-full font-semibold rounded-xl transition-all bg-[#10B981] hover:bg-[#059669] text-white"
+              style={{ paddingTop: '14px', paddingBottom: '14px', paddingLeft: '20px', paddingRight: '20px', marginTop: '16px' }}
+            >
+              Submit Appeal
+            </a>
+          </div>
         </div>
         
+        {/* Logout Button */}
         <button
           onClick={handleLogout}
-          className="w-full px-6 py-3 bg-[#1C1C1E] hover:bg-[#2C2C2E] border border-[#2C2C2E] text-white font-semibold rounded-full transition-colors"
+          className="w-full font-semibold rounded-xl transition-all bg-[#1C1C1E] hover:bg-[#2C2C2E] border border-[#2C2C2E] text-[#ECEDEE]"
+          style={{ paddingTop: '14px', paddingBottom: '14px' }}
         >
           Log Out
         </button>

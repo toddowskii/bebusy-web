@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { getMessages, sendMessage, uploadMessageFile } from '@/lib/supabase/messages'
+import { getMessages, sendMessage, uploadMessageFile, markMessagesAsRead } from '@/lib/supabase/messages'
 import { ArrowLeft, Send, Paperclip, Download, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -26,6 +26,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     loadChat()
+
+    // Mark messages as read when opening the conversation
+    markMessagesAsRead(conversationId)
 
     // Subscribe to new messages
     const channel = supabase
@@ -282,7 +285,7 @@ export default function ChatPage() {
                             <img 
                               src={message.file_url} 
                               alt={message.file_name || 'Image'}
-                              className="w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                              className="w-full max-w-[280px] h-[280px] object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
                               onClick={() => window.open(message.file_url, '_blank')}
                             />
                           )}
@@ -290,7 +293,7 @@ export default function ChatPage() {
                             <video 
                               src={message.file_url} 
                               controls 
-                              className="w-full rounded-lg"
+                              className="w-full max-w-[280px] h-[280px] object-cover rounded-lg"
                             />
                           )}
                           {isPDF && (

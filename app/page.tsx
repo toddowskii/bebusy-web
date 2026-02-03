@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
-import { Home, Users, MessageSquare, Bell, User, Target, Settings } from 'lucide-react'
+import { Home, Users, MessageSquare, Bell, User, Target, Settings, Search } from 'lucide-react'
 import { fetchPosts } from '@/lib/supabase/posts'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { CreatePost } from '@/components/CreatePost'
@@ -83,6 +83,9 @@ export default function HomePage() {
           <h1 className="text-xl font-bold text-[#10B981]">BeBusy</h1>
           
           <div className="flex items-center gap-2">
+            <Link href="/search" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
+              <Search className="w-5 h-5 text-[#9BA1A6]" />
+            </Link>
             <Link href="/settings/account" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
               <Settings className="w-5 h-5 text-[#9BA1A6]" />
             </Link>

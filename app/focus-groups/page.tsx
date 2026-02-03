@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { fetchFocusGroups, fetchUserFocusGroups } from '@/lib/supabase/focusgroups'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { Target, Users, Calendar, Clock } from 'lucide-react'
+import { Target, Users, Calendar, Clock, Compass, UserCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AppLayout } from '@/components/AppLayout'
 
@@ -64,32 +64,30 @@ export default function FocusGroupsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#2C2C2E]" style={{ marginBottom: '24px', gap: '24px' }}>
+      <div className="flex gap-2" style={{ marginBottom: '24px' }}>
         <button
           onClick={() => setActiveTab('explore')}
-          className={`text-sm font-medium transition-colors relative`}
-          style={{ 
-            paddingBottom: '12px',
-            color: activeTab === 'explore' ? '#10B981' : '#9BA1A6'
-          }}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'explore'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
         >
+          <Compass className="w-4 h-4" />
           Explore
-          {activeTab === 'explore' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#10B981]" />
-          )}
         </button>
         <button
           onClick={() => setActiveTab('yours')}
-          className={`text-sm font-medium transition-colors relative`}
-          style={{ 
-            paddingBottom: '12px',
-            color: activeTab === 'yours' ? '#10B981' : '#9BA1A6'
-          }}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'yours'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
         >
+          <UserCircle2 className="w-4 h-4" />
           Your Groups
-          {activeTab === 'yours' && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#10B981]" />
-          )}
         </button>
       </div>
 

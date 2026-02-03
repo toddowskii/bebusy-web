@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getConversations, getUserGroupChats } from '@/lib/supabase/messages'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { MessageSquare, Users } from 'lucide-react'
+import { MessageSquare, Users, Inbox, Mail, Users2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AppLayout } from '@/components/AppLayout'
+import { supabase } from '@/lib/supabase/client'
 
 export default function MessagesPage() {
   const router = useRouter()
@@ -19,7 +20,63 @@ export default function MessagesPage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+
+    // Subscribe to new messages in real-time
+    const channel = supabase
+      .channel('messages-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'messages'
+        },
+        async (payload) => {
+          // Only update the specific conversation affected
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const message = payload.new as any
+            const conversationId = message.conversation_id
+
+            // Update conversations state
+            setConversations(prev => {
+              const index = prev.findIndex(c => c.id === conversationId)
+              if (index === -1) {
+                // New conversation, reload all data
+                loadData()
+                return prev
+              }
+
+              // Update existing conversation
+              const updated = [...prev]
+              const conv = updated[index]
+              
+              // Update last message and unread count
+              if (payload.eventType === 'INSERT' && message.sender_id !== profile?.id) {
+                conv.unreadCount = (conv.unreadCount || 0) + 1
+              } else if (payload.eventType === 'UPDATE' && message.is_read) {
+                // Message was marked as read, decrease count
+                conv.unreadCount = Math.max((conv.unreadCount || 0) - 1, 0)
+              }
+              
+              conv.lastMessage = message
+              conv.updated_at = message.created_at
+              
+              // Sort conversations by most recent
+              updated.sort((a, b) => 
+                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+              )
+              
+              return updated
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile])
 
   const loadData = async () => {
     setLoading(true)
@@ -68,38 +125,41 @@ export default function MessagesPage() {
       <h2 className="text-2xl font-bold text-[#ECEDEE]" style={{ marginBottom: '24px' }}>Messages</h2>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#2C2C2E]" style={{ gap: '32px', marginBottom: '32px' }}>
+      <div className="flex gap-2" style={{ marginBottom: '24px' }}>
         <button
           onClick={() => setActiveTab('all')}
-          className="font-semibold transition-colors"
-          style={{
-            paddingBottom: '12px',
-            color: activeTab === 'all' ? '#10B981' : '#9BA1A6',
-            borderBottom: activeTab === 'all' ? '2px solid #10B981' : '2px solid transparent',
-          }}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'all'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
         >
+          <Inbox className="w-4 h-4" />
           All
         </button>
         <button
           onClick={() => setActiveTab('direct')}
-          className="font-semibold transition-colors"
-          style={{
-            paddingBottom: '12px',
-            color: activeTab === 'direct' ? '#10B981' : '#9BA1A6',
-            borderBottom: activeTab === 'direct' ? '2px solid #10B981' : '2px solid transparent',
-          }}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'direct'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
         >
-          Direct Messages
+          <Mail className="w-4 h-4" />
+          Direct
         </button>
         <button
           onClick={() => setActiveTab('groups')}
-          className="font-semibold transition-colors"
-          style={{
-            paddingBottom: '12px',
-            color: activeTab === 'groups' ? '#10B981' : '#9BA1A6',
-            borderBottom: activeTab === 'groups' ? '2px solid #10B981' : '2px solid transparent',
-          }}
+          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+            activeTab === 'groups'
+              ? 'bg-[#10B981]/10 text-[#10B981]'
+              : 'text-[#8E8E93] bg-[#1C1C1E] hover:bg-[#2C2C2E]'
+          }`}
+          style={{ paddingTop: '12px', paddingBottom: '12px', paddingLeft: '16px', paddingRight: '16px' }}
         >
+          <Users2 className="w-4 h-4" />
           Groups
         </button>
       </div>
@@ -161,18 +221,25 @@ export default function MessagesPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between" style={{ marginBottom: '4px' }}>
-                        <h3 className="font-bold truncate text-[#FFFFFF]">
-                          {item.type === 'group' 
-                            ? item.name 
-                            : (item.otherUser?.full_name || item.otherUser?.username)}
-                        </h3>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <h3 className={`font-bold truncate ${item.unreadCount > 0 ? 'text-[#FFFFFF]' : 'text-[#FFFFFF]'}`}>
+                            {item.type === 'group' 
+                              ? item.name 
+                              : (item.otherUser?.full_name || item.otherUser?.username)}
+                          </h3>
+                          {item.unreadCount > 0 && (
+                            <span className="flex-shrink-0 bg-[#10B981] text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                              {item.unreadCount}
+                            </span>
+                          )}
+                        </div>
                         {item.lastMessage && (
-                          <span className="text-sm text-[#8E8E93]">
+                          <span className="text-sm text-[#8E8E93] flex-shrink-0 ml-2">
                             {formatTime(item.lastMessage.created_at)}
                           </span>
                         )}
                       </div>
-                      <p className="text-[#9BA1A6] text-sm truncate">
+                      <p className={`text-sm truncate ${item.unreadCount > 0 ? 'text-[#FFFFFF] font-semibold' : 'text-[#9BA1A6]'}`}>
                         {(() => {
                           if (!item.lastMessage) return 'No messages yet';
                           if (item.lastMessage.content) return item.lastMessage.content;

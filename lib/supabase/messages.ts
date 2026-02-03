@@ -79,36 +79,104 @@ export async function getUserGroupChats() {
  * Get or create a conversation between two users
  */
 export async function getOrCreateConversation(otherUserId: string) {
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session?.session?.user?.id;
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    const userId = session?.session?.user?.id;
 
-  if (!userId) {
-    throw new Error('User not authenticated');
+    if (!userId) {
+      return { conversationId: null, error: 'User not authenticated' };
+    }
+
+    // Check if conversation exists
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('*')
+      .or(`and(user1_id.eq.${userId},user2_id.eq.${otherUserId}),and(user1_id.eq.${otherUserId},user2_id.eq.${userId})`)
+      .single();
+
+    if (existing) {
+      return { conversationId: existing.id, error: null };
+    }
+
+    // Create new conversation
+    const { data, error } = await supabase
+      .from('conversations')
+      .insert({
+        user1_id: userId,
+        user2_id: otherUserId,
+      } as any)
+      .select()
+      .single();
+
+    if (error) {
+      return { conversationId: null, error: error.message };
+    }
+    
+    return { conversationId: data.id, error: null };
+  } catch (error) {
+    return { conversationId: null, error: (error as Error).message };
   }
+}
 
-  // Check if conversation exists
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select('*')
-    .or(`and(user1_id.eq.${userId},user2_id.eq.${otherUserId}),and(user1_id.eq.${otherUserId},user2_id.eq.${userId})`)
-    .single();
+/**
+ * Get unread message count for current user
+ */
+export async function getUnreadMessageCount() {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    const userId = session?.session?.user?.id;
 
-  if (existing) {
-    return existing;
+    if (!userId) {
+      return 0;
+    }
+
+    const { count, error } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_read', false)
+      .neq('sender_id', userId);
+
+    if (error) {
+      console.error('Error fetching unread count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error('Error in getUnreadMessageCount:', error);
+    return 0;
   }
+}
 
-  // Create new conversation
-  const { data, error } = await supabase
-    .from('conversations')
-    .insert({
-      user1_id: userId,
-      user2_id: otherUserId,
-    } as any)
-    .select()
-    .single();
+/**
+ * Mark all messages in a conversation as read
+ */
+export async function markMessagesAsRead(conversationId: string) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    const userId = session?.session?.user?.id;
 
-  if (error) throw error;
-  return data;
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { error } = await supabase
+      .from('messages')
+      .update({ is_read: true })
+      .eq('conversation_id', conversationId)
+      .eq('is_read', false)
+      .neq('sender_id', userId);
+
+    if (error) {
+      console.error('Error marking messages as read:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error in markMessagesAsRead:', error);
+    return { success: false, error: (error as Error).message };
+  }
 }
 
 /**
@@ -156,15 +224,24 @@ export async function getConversations() {
         // Get last message
         const { data: messages } = await supabase
           .from('messages')
-          .select('id, content, created_at, file_url, file_type, file_name')
+          .select('id, content, created_at, file_url, file_type, file_name, sender_id')
           .eq('conversation_id', conv.id)
           .order('created_at', { ascending: false })
           .limit(1);
+
+        // Get unread count for this conversation
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .eq('is_read', false)
+          .neq('sender_id', userId);
 
         return {
           id: conv.id,
           otherUser: profile,
           lastMessage: messages?.[0] || null,
+          unreadCount: unreadCount || 0,
           updated_at: conv.updated_at,
         };
       })
