@@ -1,4 +1,5 @@
 import { supabase } from './client';
+import { createNotification } from './notifications';
 import { Database } from '@/types/database.types';
 import { validateImageUpload } from '@/lib/security/upload';
 
@@ -271,6 +272,20 @@ export async function followUser(followingId: string) {
     console.error('Error following user:', error);
     return { error };
   }
+
+  // Create notification for the followed user
+  const { data: currentUser } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', userId)
+    .single();
+
+  await createNotification({
+    userId: followingId,
+    type: 'follow',
+    content: `${(currentUser as any)?.username || 'Someone'} started following you`,
+    relatedId: userId,
+  });
 
   return { error: null };
 }

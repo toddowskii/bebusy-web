@@ -1,5 +1,6 @@
 import { supabase } from './client';
 import { Database } from '@/types/database.types';
+import { createNotification } from './notifications';
 import { sanitizePlainText } from '@/lib/security/sanitize';
 import { validateContent } from '@/lib/security/moderation';
 
@@ -144,6 +145,28 @@ export async function likePost(postId: string) {
   if (error) {
     console.error('Error liking post:', error);
     return { error };
+  }
+
+  // Get post author and create notification
+  const { data: post } = await supabase
+    .from('posts')
+    .select('user_id, content')
+    .eq('id', postId)
+    .single();
+
+  if (post) {
+    const { data: currentUser } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', userId)
+      .single();
+
+    await createNotification({
+      userId: (post as any).user_id,
+      type: 'like',
+      content: `${(currentUser as any)?.username || 'Someone'} liked your post`,
+      relatedId: postId,
+    });
   }
 
   return { error: null };

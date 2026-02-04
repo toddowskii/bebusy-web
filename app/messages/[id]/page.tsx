@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { getMessages, sendMessage, uploadMessageFile, markMessagesAsRead } from '@/lib/supabase/messages'
-import { ArrowLeft, Send, Paperclip, Download, FileText } from 'lucide-react'
+import { getMessages, sendMessage, uploadMessageFile, markMessagesAsRead, deleteMessage } from '@/lib/supabase/messages'
+import { ArrowLeft, Send, Paperclip, Download, FileText, Reply, Trash2, X, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createReport, type ReportReason } from '@/lib/supabase/reports'
 
 export default function ChatPage() {
   const params = useParams()
@@ -19,6 +20,11 @@ export default function ChatPage() {
   const [otherUser, setOtherUser] = useState<any>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [replyingTo, setReplyingTo] = useState<any>(null)
+  const [reportingMessage, setReportingMessage] = useState<any>(null)
+  const [reportReason, setReportReason] = useState<ReportReason>('spam')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -27,8 +33,10 @@ export default function ChatPage() {
   useEffect(() => {
     loadChat()
 
-    // Mark messages as read when opening the conversation
-    markMessagesAsRead(conversationId)
+    // Mark messages as read when opening the conversation (don't block on errors)
+    markMessagesAsRead(conversationId).catch(err => {
+      console.error('Error marking messages as read:', err)
+    })
 
     // Subscribe to new messages
     const channel = supabase
@@ -51,6 +59,14 @@ export default function ChatPage() {
                 username,
                 full_name,
                 avatar_url
+              ),
+              parent_message:parent_message_id (
+                id,
+                content,
+                sender_id,
+                profiles:sender_id (
+                  username
+                )
               )
             `)
             .eq('id', (payload.new as any).id)
@@ -58,13 +74,36 @@ export default function ChatPage() {
 
           if (data) {
             setMessages((prev) => {
-              // Check if message already exists to avoid duplicates
-              if (prev.some((m: any) => m.id === (data as any).id)) {
-                return prev
+              // Remove any temporary message from the same sender with similar content
+              const filtered = prev.filter(m => {
+                if (m.id.toString().startsWith('temp-') && 
+                    m.sender_id === (data as any).sender_id &&
+                    m.content === (data as any).content) {
+                  return false
+                }
+                return true
+              })
+              
+              // Check if the real message already exists
+              if (filtered.some((m: any) => m.id === (data as any).id)) {
+                return filtered
               }
-              return [...prev, data as any]
+              
+              return [...filtered, data as any]
             })
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        (payload) => {
+          setMessages((prev) => prev.filter(m => m.id !== (payload.old as any).id))
         }
       )
       .subscribe()
@@ -136,6 +175,14 @@ export default function ChatPage() {
     setSending(true)
     const messageContent = newMessage.trim()
     setNewMessage('')
+    const parentId = replyingTo?.id || null
+    const parentData = replyingTo ? {
+      id: replyingTo.id,
+      content: replyingTo.content,
+      sender_id: replyingTo.sender_id,
+      profiles: replyingTo.profiles
+    } : null
+    setReplyingTo(null)
 
     // Optimistic update - add message immediately
     const optimisticMessage = {
@@ -144,12 +191,13 @@ export default function ChatPage() {
       sender_id: currentUser.id,
       conversation_id: conversationId,
       created_at: new Date().toISOString(),
-      profiles: currentUser
+      profiles: currentUser,
+      parent_message: parentData
     }
     setMessages((prev) => [...prev, optimisticMessage])
 
     try {
-      const sentMessage = await sendMessage(conversationId, messageContent, null, null, null)
+      const sentMessage = await sendMessage(conversationId, messageContent, null, null, null, parentId)
       if (!sentMessage) {
         throw new Error('No message returned from server')
       }
@@ -166,6 +214,44 @@ export default function ChatPage() {
       setNewMessage(messageContent)
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleDelete = async (messageId: string) => {
+    try {
+      await deleteMessage(messageId)
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+      toast.success('Message deleted')
+    } catch (error: any) {
+      console.error('Error deleting message:', error)
+      toast.error(error?.message || 'Failed to delete message')
+    }
+  }
+
+  const handleReportMessage = async () => {
+    if (isReporting || !reportingMessage) return
+
+    setIsReporting(true)
+    try {
+      const result = await createReport({
+        reported_user_id: reportingMessage.sender_id,
+        content_type: 'message',
+        content_id: reportingMessage.id,
+        reason: reportReason,
+        description: reportDescription || undefined
+      })
+
+      if (result.error) throw new Error(result.error)
+
+      toast.success('Report submitted')
+      setReportingMessage(null)
+      setReportReason('spam')
+      setReportDescription('')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit report')
+      console.error(error)
+    } finally {
+      setIsReporting(false)
     }
   }
 
@@ -267,7 +353,7 @@ export default function ChatPage() {
               return (
                 <div
                   key={`${message.id}-${index}`}
-                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group`}
                 >
                   <div className={`max-w-[70%] ${isOwn ? 'order-2' : 'order-1'}`}>
                     <div
@@ -278,6 +364,15 @@ export default function ChatPage() {
                       }`}
                       style={{ padding: hasFile && !message.content ? '0' : '12px 16px' }}
                     >
+                      {message.parent_message && (
+                        <div className="mb-2 pb-2 border-b border-white/20">
+                          <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
+                            <Reply className="w-3 h-3" />
+                            <span>{message.parent_message.profiles?.username}</span>
+                          </div>
+                          <p className="text-sm opacity-80 truncate">{message.parent_message.content}</p>
+                        </div>
+                      )}
                       {/* File attachment */}
                       {hasFile && (
                         <div className={message.content ? 'mb-2' : ''}>
@@ -327,6 +422,33 @@ export default function ChatPage() {
                         <p className="whitespace-pre-wrap break-words">{message.content}</p>
                       )}
                     </div>
+                    <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setReplyingTo(message)}
+                        className="text-xs text-[#9BA1A6] hover:text-[#10B981] flex items-center gap-1"
+                      >
+                        <Reply className="w-3 h-3" />
+                        Reply
+                      </button>
+                      {!isOwn && (
+                        <button
+                          onClick={() => setReportingMessage(message)}
+                          className="text-xs text-[#9BA1A6] hover:text-yellow-500 flex items-center gap-1"
+                        >
+                          <Flag className="w-3 h-3" />
+                          Report
+                        </button>
+                      )}
+                      {isOwn && (
+                        <button
+                          onClick={() => handleDelete(message.id)}
+                          className="text-xs text-[#9BA1A6] hover:text-red-500 flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -338,6 +460,27 @@ export default function ChatPage() {
 
       {/* Input */}
       <form onSubmit={handleSend} className="border-t border-[#2C2C2E]" style={{ padding: '20px' }}>
+        {replyingTo && (
+          <div className="mb-3 bg-[#1C1C1E] rounded-lg p-3 border border-[#2C2C2E]">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Reply className="w-4 h-4 text-[#10B981]" />
+                  <span className="text-sm text-[#10B981] font-semibold">
+                    Replying to {replyingTo.profiles?.username}
+                  </span>
+                </div>
+                <p className="text-sm text-[#9BA1A6] truncate">{replyingTo.content || 'Attachment'}</p>
+              </div>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="text-[#9BA1A6] hover:text-white ml-2"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center" style={{ gap: '12px' }}>
           <input
             type="file"
@@ -363,7 +506,7 @@ export default function ChatPage() {
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder={uploading ? "Uploading file..." : "Type a message..."}
+            placeholder={uploading ? "Uploading file..." : replyingTo ? "Type your reply..." : "Type a message..."}
             className="flex-1 bg-[#1C1C1E] text-white rounded-full outline-none focus:ring-2 focus:ring-[#10B981] border border-[#2C2C2E]"
             style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px' }}
             disabled={sending || uploading}
@@ -378,6 +521,80 @@ export default function ChatPage() {
           </button>
         </div>
       </form>
+
+      {reportingMessage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setReportingMessage(null)}
+        >
+          <div
+            className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full"
+            style={{ padding: '28px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Flag className="w-6 h-6 text-yellow-500" />
+                </div>
+                <h3 className="text-xl font-bold text-[#FFFFFF]">Report Message</h3>
+              </div>
+
+              <p className="text-[#9BA1A6] text-sm" style={{ marginBottom: '20px' }}>
+                Help us understand what's wrong with this message.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Reason
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] focus:outline-none focus:border-green-500"
+                >
+                  <option value="spam">Spam</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="hate_speech">Hate Speech</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="misinformation">Misinformation</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Provide more context..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-green-500 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setReportingMessage(null)}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#FFFFFF] font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportMessage}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  {isReporting ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

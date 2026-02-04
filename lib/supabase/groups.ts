@@ -189,6 +189,34 @@ export async function getGroup(groupId: string) {
 }
 
 /**
+ * Get group members with full profile details
+ */
+export async function getGroupMembers(groupId: string) {
+  const { data, error } = await supabase
+    .from('group_members')
+    .select(`
+      id,
+      user_id,
+      role,
+      joined_at,
+      profiles:user_id (
+        id,
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .eq('group_id', groupId)
+    .order('joined_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching group members:', error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
  * Join a group
  */
 export async function joinGroup(groupId: string) {
@@ -276,7 +304,7 @@ export async function getGroupPosts(groupId: string) {
         )
       `)
       .eq('group_id', groupId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) {
       // group_id column might not exist yet
@@ -297,30 +325,4 @@ export async function getGroupPosts(groupId: string) {
     console.warn('Error in getGroupPosts:', error);
     return [];
   }
-}
-
-/**
- * Create a post in a group
- */
-export async function createGroupPost(groupId: string, content: string, imageUrl?: string) {
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session?.session?.user?.id;
-
-  if (!userId) {
-    throw new Error('User not authenticated');
-  }
-
-  const { data, error } = await supabase
-    .from('posts')
-    .insert({
-      user_id: userId,
-      content,
-      image_url: imageUrl,
-      group_id: groupId,
-    } as any)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
 }

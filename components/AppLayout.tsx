@@ -16,12 +16,15 @@ export function AppLayout({ children, username }: AppLayoutProps) {
   const router = useRouter()
   const [isCheckingBan, setIsCheckingBan] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const checkBanStatus = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
+        setUserId(session.user.id)
         const { data: profile } = await (supabase
           .from('profiles')
           .select('role')
@@ -46,41 +49,68 @@ export function AppLayout({ children, username }: AppLayoutProps) {
   }, [router])
 
   useEffect(() => {
-    const fetchUnreadCount = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+    if (!userId) return
 
+    const fetchUnreadCount = async () => {
       const { count } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .eq('is_read', false)
-        .neq('sender_id', session.user.id)
+        .neq('sender_id', userId)
 
       setUnreadCount(count || 0)
+
+      const { count: notifCount } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('is_read', false)
+
+      setUnreadNotifCount(notifCount || 0)
     }
 
     fetchUnreadCount()
 
-    // Subscribe to message changes
-    const channel = supabase
-      .channel('unread-messages')
+    // Subscribe to message changes for this user
+    const messagesChannel = supabase
+      .channel('unread-messages-app')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'messages'
+          table: 'messages',
         },
-        () => {
+        (payload) => {
+          console.log('Message change detected:', payload)
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    // Subscribe to notification changes for this user
+    const notifsChannel = supabase
+      .channel('unread-notifications-app')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('Notification change detected:', payload)
           fetchUnreadCount()
         }
       )
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.removeChannel(messagesChannel)
+      supabase.removeChannel(notifsChannel)
     }
-  }, [])
+  }, [userId])
 
   if (isCheckingBan) {
     return null // or a loading spinner
@@ -104,8 +134,13 @@ export function AppLayout({ children, username }: AppLayoutProps) {
             <Link href="/settings/account" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
               <Settings className="w-5 h-5 text-[#9BA1A6]" />
             </Link>
-            <Link href="/notifications" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
+            <Link href="/notifications" className="p-2 hover:bg-[#151718] rounded-lg transition-colors relative">
               <Bell className="w-5 h-5 text-[#9BA1A6]" />
+              {unreadNotifCount > 0 && (
+                <span className="absolute top-1 right-1 bg-[#10B981] text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                  {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                </span>
+              )}
             </Link>
           </div>
         </div>

@@ -5,10 +5,11 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { getComments, createComment, deleteComment } from '@/lib/supabase/comments'
+import { getComments, createComment, deleteComment, updateComment, likeComment, unlikeComment } from '@/lib/supabase/comments'
 import { likePost, unlikePost } from '@/lib/supabase/posts'
-import { ArrowLeft, Heart, MessageCircle, Share2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Heart, MessageCircle, Share2, Trash2, Reply, Edit2, X, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createReport, type ReportReason } from '@/lib/supabase/reports'
 
 export default function PostDetailPage() {
   const params = useParams()
@@ -23,6 +24,14 @@ export default function PostDetailPage() {
   const [submitting, setSubmitting] = useState(false)
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
+  const [replyingTo, setReplyingTo] = useState<any>(null)
+  const [editingComment, setEditingComment] = useState<any>(null)
+  const [editContent, setEditContent] = useState('')
+  const [reportingComment, setReportingComment] = useState<any>(null)
+  const [reportReason, setReportReason] = useState<ReportReason>('spam')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
+  const [likingCommentId, setLikingCommentId] = useState<string | null>(null)
 
   useEffect(() => {
     loadPost()
@@ -65,7 +74,15 @@ export default function PostDetailPage() {
 
       // Fetch comments
       const commentsData = await getComments(postId)
-      setComments(commentsData)
+      const commentsWithLikes = (commentsData || []).map((comment: any) => {
+        const likes = comment.comment_likes || []
+        return {
+          ...comment,
+          likes_count: likes.length,
+          is_liked: currentProfile?.id ? likes.some((like: any) => like.user_id === currentProfile.id) : false
+        }
+      })
+      setComments(commentsWithLikes)
     } catch (error) {
       console.error('Error loading post:', error)
       toast.error('Failed to load post')
@@ -103,6 +120,7 @@ export default function PostDetailPage() {
       const comment = await createComment(postId, newComment.trim())
       setComments([...comments, comment])
       setNewComment('')
+      setReplyingTo(null)
       toast.success('Comment added!')
     } catch (error) {
       console.error('Error creating comment:', error)
@@ -120,6 +138,105 @@ export default function PostDetailPage() {
     } catch (error) {
       console.error('Error deleting comment:', error)
       toast.error('Failed to delete comment')
+    }
+  }
+
+  const handleToggleCommentLike = async (comment: any) => {
+    if (!currentUser || likingCommentId) return
+
+    const isLiked = !!comment.is_liked
+    setLikingCommentId(comment.id)
+
+    setComments(prev => prev.map(c => {
+      if (c.id !== comment.id) return c
+      return {
+        ...c,
+        is_liked: !isLiked,
+        likes_count: (c.likes_count || 0) + (isLiked ? -1 : 1)
+      }
+    }))
+
+    try {
+      if (isLiked) {
+        await unlikeComment(comment.id)
+      } else {
+        await likeComment(comment.id)
+      }
+    } catch (error) {
+      console.error('Error updating comment like:', error)
+      toast.error('Failed to update like')
+      setComments(prev => prev.map(c => {
+        if (c.id !== comment.id) return c
+        return {
+          ...c,
+          is_liked: isLiked,
+          likes_count: (c.likes_count || 0) + (isLiked ? 1 : -1)
+        }
+      }))
+    } finally {
+      setLikingCommentId(null)
+    }
+  }
+
+  const handleStartEdit = (comment: any) => {
+    setEditingComment(comment)
+    setEditContent(comment.content)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingComment(null)
+    setEditContent('')
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editContent.trim() || !editingComment) return
+
+    try {
+      const updated: any = await updateComment(editingComment.id, editContent.trim())
+      setComments(comments.map((c: any) => c.id === updated.id ? updated : c))
+      setEditingComment(null)
+      setEditContent('')
+      toast.success('Comment updated!')
+    } catch (error) {
+      console.error('Error updating comment:', error)
+      toast.error('Failed to update comment')
+    }
+  }
+
+  const handleStartReply = (comment: any) => {
+    setReplyingTo(comment)
+    setNewComment(`@${comment.profiles.username} `)
+  }
+
+  const handleCancelReply = () => {
+    setReplyingTo(null)
+    setNewComment('')
+  }
+
+  const handleReportComment = async () => {
+    if (isReporting || !reportingComment) return
+    
+    setIsReporting(true)
+    try {
+      const result = await createReport({
+        reported_user_id: reportingComment.user_id,
+        content_type: 'comment',
+        content_id: reportingComment.id,
+        reason: reportReason,
+        description: reportDescription || undefined
+      })
+
+      if (result.error) throw new Error(result.error)
+      
+      toast.success('Report submitted')
+      setReportingComment(null)
+      setReportReason('spam')
+      setReportDescription('')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit report')
+      console.error(error)
+    } finally {
+      setIsReporting(false)
     }
   }
 
@@ -233,6 +350,25 @@ export default function PostDetailPage() {
         {/* Comment Form */}
         {currentUser && (
           <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] shadow-sm" style={{ marginBottom: '20px', paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '24px' }}>
+            {replyingTo && (
+              <div className="flex items-center justify-between bg-[#2C2C2E] rounded-lg mb-3" style={{ padding: '8px 12px' }}>
+                <div className="flex items-center gap-2">
+                  <Reply className="w-4 h-4 text-[#10B981]" />
+                  <span className="text-sm text-[#9BA1A6]">
+                    Replying to <span className="text-[#10B981]">@{replyingTo.profiles.username}</span>
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setReplyingTo(null)
+                    setNewComment('')
+                  }}
+                  className="p-1 hover:bg-[#3C3C3E] rounded transition-colors"
+                >
+                  <X className="w-4 h-4 text-[#9BA1A6]" />
+                </button>
+              </div>
+            )}
             <form onSubmit={handleSubmitComment}>
               <div className="flex gap-3">
                 {currentUser.avatar_url ? (
@@ -254,7 +390,7 @@ export default function PostDetailPage() {
                       e.target.style.height = 'auto'
                       e.target.style.height = e.target.scrollHeight + 'px'
                     }}
-                    placeholder="Post your reply"
+                    placeholder={replyingTo ? "Post your reply..." : "Post your reply"}
                     className="w-full bg-transparent text-[#FFFFFF] placeholder-[#8E8E93] outline-none resize-none leading-relaxed text-[15px]"
                     rows={1}
                     disabled={submitting}
@@ -266,19 +402,8 @@ export default function PostDetailPage() {
                 <button
                   type="submit"
                   disabled={submitting || !newComment.trim()}
-                  style={{
-                    padding: '10px 24px',
-                    backgroundColor: '#10B981',
-                    color: 'white',
-                    fontWeight: '600',
-                    borderRadius: '9999px',
-                    border: 'none',
-                    cursor: submitting || !newComment.trim() ? 'not-allowed' : 'pointer',
-                    opacity: submitting || !newComment.trim() ? 0.5 : 1,
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => !submitting && newComment.trim() && (e.currentTarget.style.backgroundColor = '#0ea472')}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
+                  className="bg-[#10B981] hover:bg-[#0ea472] text-white font-semibold rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '10px', paddingBottom: '10px' }}
                 >
                   {submitting ? 'Replying...' : 'Reply'}
                 </button>
@@ -299,9 +424,10 @@ export default function PostDetailPage() {
           ) : (
             <div className="space-y-3">
               {comments.map((comment) => (
-                <div key={comment.id} className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] shadow-sm hover:bg-[#252527] transition-all" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }}>
-                  <div className="flex gap-3">
-                    <Link href={`/profile/${comment.profiles.username}`}>
+                <div key={comment.id} className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] shadow-sm hover:bg-[#252527] transition-all group" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }}>
+                  {editingComment?.id === comment.id ? (
+                    /* Edit Mode */
+                    <div className="flex gap-3">
                       {comment.profiles.avatar_url ? (
                         <img
                           src={comment.profiles.avatar_url}
@@ -313,39 +439,202 @@ export default function PostDetailPage() {
                           {comment.profiles.username[0].toUpperCase()}
                         </div>
                       )}
-                    </Link>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start gap-2 mb-1 flex-wrap">
-                        <Link href={`/profile/${comment.profiles.username}`} className="font-bold text-[#FFFFFF] hover:underline truncate">
-                          {comment.profiles.full_name || comment.profiles.username}
-                        </Link>
-                        <Link href={`/profile/${comment.profiles.username}`} className="text-[#8E8E93] text-sm hover:underline truncate">
-                          @{comment.profiles.username}
-                        </Link>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[#8E8E93]">·</span>
-                          <span className="text-[#8E8E93] text-sm whitespace-nowrap">
-                            {formatDate(comment.created_at)}
-                          </span>
-                        </div>
-                        {currentUser?.id === comment.user_id && (
+                      <div className="flex-1">
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => {
+                            setEditContent(e.target.value)
+                            e.target.style.height = 'auto'
+                            e.target.style.height = e.target.scrollHeight + 'px'
+                          }}
+                          className="w-full bg-[#2C2C2E] text-[#FFFFFF] rounded-xl outline-none resize-none leading-relaxed text-[15px]"
+                          style={{ padding: '12px', minHeight: '60px', maxHeight: '200px', overflow: 'auto' }}
+                        />
+                        <div className="flex gap-2 mt-2">
                           <button
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="ml-auto p-1.5 text-[#8E8E93] hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all flex-shrink-0"
+                            onClick={handleCancelEdit}
+                            className="bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] font-semibold rounded-full transition-colors"
+                            style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '6px', paddingBottom: '6px' }}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Cancel
                           </button>
-                        )}
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={!editContent.trim()}
+                            className="bg-[#10B981] hover:bg-[#0ea472] text-white font-semibold rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '6px', paddingBottom: '6px' }}
+                          >
+                            Save
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-[#FFFFFF] whitespace-pre-wrap break-words leading-relaxed text-[15px]">{comment.content}</p>
                     </div>
-                  </div>
+                  ) : (
+                    /* View Mode */
+                    <div className="flex gap-3">
+                      <Link href={`/profile/${comment.profiles.username}`}>
+                        {comment.profiles.avatar_url ? (
+                          <img
+                            src={comment.profiles.avatar_url}
+                            alt={comment.profiles.username}
+                            className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                            {comment.profiles.username[0].toUpperCase()}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-2 mb-1 flex-wrap">
+                          <Link href={`/profile/${comment.profiles.username}`} className="font-bold text-[#FFFFFF] hover:underline truncate">
+                            {comment.profiles.full_name || comment.profiles.username}
+                          </Link>
+                          <Link href={`/profile/${comment.profiles.username}`} className="text-[#8E8E93] text-sm hover:underline truncate">
+                            @{comment.profiles.username}
+                          </Link>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-[#8E8E93]">·</span>
+                            <span className="text-[#8E8E93] text-sm whitespace-nowrap">
+                              {formatDate(comment.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[#FFFFFF] whitespace-pre-wrap break-words leading-relaxed text-[15px] mb-2">{comment.content}</p>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleToggleCommentLike(comment)}
+                            disabled={likingCommentId === comment.id}
+                            className={`text-xs flex items-center gap-1 transition-colors ${
+                              comment.is_liked
+                                ? 'text-red-500'
+                                : 'text-[#9BA1A6] hover:text-red-500'
+                            }`}
+                          >
+                            <Heart className={`w-3 h-3 ${comment.is_liked ? 'fill-red-500' : ''}`} />
+                            {comment.likes_count || 0}
+                          </button>
+                          <button
+                            onClick={() => handleStartReply(comment)}
+                            className="text-xs text-[#9BA1A6] hover:text-[#10B981] flex items-center gap-1 transition-colors"
+                          >
+                            <Reply className="w-3 h-3" />
+                            Reply
+                          </button>
+                          {currentUser?.id && currentUser.id !== comment.user_id && (
+                            <button
+                              onClick={() => setReportingComment(comment)}
+                              className="text-xs text-[#9BA1A6] hover:text-yellow-500 flex items-center gap-1 transition-colors"
+                            >
+                              <Flag className="w-3 h-3" />
+                              Report
+                            </button>
+                          )}
+                          {currentUser?.id === comment.user_id && (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(comment)}
+                                className="text-xs text-[#9BA1A6] hover:text-blue-500 flex items-center gap-1 transition-colors"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteComment(comment.id)}
+                                className="text-xs text-[#9BA1A6] hover:text-red-500 flex items-center gap-1 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </div>
       </main>
+
+      {/* Report Comment Modal */}
+      {reportingComment && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setReportingComment(null)}
+        >
+          <div 
+            className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full"
+            style={{ padding: '28px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Flag className="w-6 h-6 text-yellow-500" />
+                </div>
+                <h3 className="text-xl font-bold text-[#FFFFFF]">Report Comment</h3>
+              </div>
+              
+              <p className="text-[#9BA1A6] text-sm" style={{ marginBottom: '20px' }}>
+                Help us understand what's wrong with this comment.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Reason
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] focus:outline-none focus:border-green-500"
+                >
+                  <option value="spam">Spam</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="hate_speech">Hate Speech</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="misinformation">Misinformation</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Provide more context..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-green-500 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setReportingComment(null)}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#FFFFFF] font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportComment}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  {isReporting ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

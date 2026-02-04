@@ -4,10 +4,11 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
-import { getGroupPosts } from '@/lib/supabase/groups'
-import { createPost } from '@/lib/supabase/posts'
-import { ArrowLeft, Send, Users } from 'lucide-react'
+import { getGroupMessages, sendGroupMessage, markGroupMessagesAsRead, deleteMessage } from '@/lib/supabase/messages'
+import { getGroup } from '@/lib/supabase/groups'
+import { ArrowLeft, Send, Users, Reply, Trash2, X, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { createReport, type ReportReason } from '@/lib/supabase/reports'
 
 export default function GroupChatPage() {
   const params = useParams()
@@ -17,49 +18,73 @@ export default function GroupChatPage() {
 
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [group, setGroup] = useState<any>(null)
-  const [posts, setPosts] = useState<any[]>([])
+  const [messages, setMessages] = useState<any[]>([])
   const [newMessage, setNewMessage] = useState('')
+  const [replyingTo, setReplyingTo] = useState<any>(null)
+  const [reportingMessage, setReportingMessage] = useState<any>(null)
+  const [reportReason, setReportReason] = useState<ReportReason>('spam')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
 
   useEffect(() => {
     loadGroupChat()
 
-    // Subscribe to new posts in this group
+    // Subscribe to new messages
     const channel = supabase
-      .channel(`group:${groupId}`)
+      .channel(`group-messages:${groupId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'posts',
+          table: 'messages',
           filter: `group_id=eq.${groupId}`
         },
         async (payload) => {
           const { data } = await supabase
-            .from('posts')
+            .from('messages')
             .select(`
               *,
-              profiles:user_id (
+              profiles:sender_id (
                 id,
                 username,
                 full_name,
                 avatar_url
+              ),
+              parent_message:parent_message_id (
+                id,
+                content,
+                sender_id,
+                profiles:sender_id (
+                  username
+                )
               )
             `)
             .eq('id', (payload.new as any).id)
             .single()
 
           if (data) {
-            setPosts((prev) => {
-              // Check if post already exists to avoid duplicates
-              if (prev.some((p: any) => p.id === (data as any).id)) {
+            setMessages((prev) => {
+              if (prev.some((m: any) => m.id === (data as any).id)) {
                 return prev
               }
               return [...prev, data as any]
             })
           }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `group_id=eq.${groupId}`
+        },
+        (payload) => {
+          setMessages((prev) => prev.filter(m => m.id !== (payload.old as any).id))
         }
       )
       .subscribe()
@@ -71,7 +96,7 @@ export default function GroupChatPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [posts])
+  }, [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -89,38 +114,50 @@ export default function GroupChatPage() {
         return
       }
 
-      // Get group details
-      const { data: groupData } = await supabase
-        .from('groups')
+      // Get the focus group by group_id
+      const { data: focusGroupData, error: focusGroupError } = await supabase
+        .from('focus_groups')
         .select('*')
-        .eq('id', groupId)
+        .eq('group_id', groupId)
         .single()
 
+      if (focusGroupError || !focusGroupData) {
+        toast.error('Focus group not found')
+        router.push('/messages')
+        return
+      }
+
+      // Also get the group details
+      const groupData = await getGroup(groupId)
+      
       if (!groupData) {
         toast.error('Group not found')
         router.push('/messages')
         return
       }
-
+      
       setGroup(groupData)
 
-      // Check if user is a member
-      const { data: membership } = await supabase
+      const { data: membership, error: membershipError } = await supabase
         .from('group_members')
         .select('*')
         .eq('group_id', groupId)
         .eq('user_id', currentProfile.id)
         .single()
 
-      if (!membership) {
+      if (membershipError || !membership) {
         toast.error('You are not a member of this group')
         router.push('/messages')
         return
       }
 
-      // Load posts
-      const groupPosts = await getGroupPosts(groupId)
-      setPosts(groupPosts)
+      const groupMessages = await getGroupMessages(groupId)
+      setMessages(groupMessages)
+
+      // Mark messages as read (don't block on errors)
+      markGroupMessagesAsRead(groupId).catch(err => {
+        console.error('Error marking messages as read:', err)
+      })
     } catch (error) {
       console.error('Error loading group chat:', error)
       toast.error('Failed to load group chat')
@@ -136,25 +173,56 @@ export default function GroupChatPage() {
     setSending(true)
     const messageContent = newMessage.trim()
     setNewMessage('')
+    const parentId = replyingTo?.id || null
+    setReplyingTo(null)
 
     try {
-      const result = await createPost(messageContent, null, groupId)
-      if (result.data) {
-        // Add the message instantly to the UI
-        setPosts(prev => [...prev, { ...result.data, profiles: currentUser }])
-      }
-    } catch (error) {
+      await sendGroupMessage(groupId, messageContent, null, null, null, parentId)
+    } catch (error: any) {
       console.error('Error sending message:', error)
-      toast.error('Failed to send message')
+      toast.error(error?.message || 'Failed to send message')
       setNewMessage(messageContent)
     } finally {
       setSending(false)
     }
   }
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  const handleDelete = async (messageId: string) => {
+    try {
+      await deleteMessage(messageId)
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+      toast.success('Message deleted')
+    } catch (error: any) {
+      console.error('Error deleting message:', error)
+      toast.error(error?.message || 'Failed to delete message')
+    }
+  }
+
+  const handleReportMessage = async () => {
+    if (isReporting || !reportingMessage) return
+
+    setIsReporting(true)
+    try {
+      const result = await createReport({
+        reported_user_id: reportingMessage.sender_id,
+        content_type: 'message',
+        content_id: reportingMessage.id,
+        reason: reportReason,
+        description: reportDescription || undefined
+      })
+
+      if (result.error) throw new Error(result.error)
+
+      toast.success('Report submitted')
+      setReportingMessage(null)
+      setReportReason('spam')
+      setReportDescription('')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit report')
+      console.error(error)
+    } finally {
+      setIsReporting(false)
+    }
   }
 
   if (loading) {
@@ -169,7 +237,6 @@ export default function GroupChatPage() {
 
   return (
     <div className="h-screen bg-[#000000] text-white flex flex-col">
-      {/* Header */}
       <div className="sticky top-0 bg-[#000000]/95 backdrop-blur-md border-b border-[#2C2C2E] z-10 flex items-center" style={{ padding: '20px', gap: '16px' }}>
         <button onClick={() => router.back()} className="p-2 hover:bg-[#1C1C1E] rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5" />
@@ -185,37 +252,36 @@ export default function GroupChatPage() {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '20px' }}>
-        {posts.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-[#9BA1A6]">No messages yet. Say hi! 👋</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {posts.map((post, index) => {
-              const isOwn = post.user_id === currentUser.id
+            {messages.map((message, index) => {
+              const isOwn = message.sender_id === currentUser.id
               return (
                 <div
-                  key={`${post.id}-${index}`}
-                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                  key={`${message.id}-${index}`}
+                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group`}
                 >
                   <div className={`max-w-[70%] ${isOwn ? 'order-2' : 'order-1'}`}>
                     {!isOwn && (
                       <div className="flex items-center mb-1" style={{ gap: '8px' }}>
-                        {post.profiles?.avatar_url ? (
+                        {message.profiles?.avatar_url ? (
                           <img
-                            src={post.profiles.avatar_url}
-                            alt={post.profiles.username}
+                            src={message.profiles.avatar_url}
+                            alt={message.profiles.username}
                             className="w-6 h-6 rounded-full object-cover"
                           />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">
-                            {post.profiles?.username[0].toUpperCase()}
+                            {message.profiles?.username[0].toUpperCase()}
                           </div>
                         )}
                         <span className="text-sm font-semibold text-[#ECEDEE]">
-                          {post.profiles?.full_name || post.profiles?.username}
+                          {message.profiles?.full_name || message.profiles?.username}
                         </span>
                       </div>
                     )}
@@ -227,7 +293,43 @@ export default function GroupChatPage() {
                       }`}
                       style={{ padding: '12px 16px' }}
                     >
-                      <p className="whitespace-pre-wrap break-words">{post.content}</p>
+                      {message.parent_message && (
+                        <div className="mb-2 pb-2 border-b border-white/20">
+                          <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
+                            <Reply className="w-3 h-3" />
+                            <span>{message.parent_message.profiles?.username}</span>
+                          </div>
+                          <p className="text-sm opacity-80 truncate">{message.parent_message.content}</p>
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setReplyingTo(message)}
+                        className="text-xs text-[#9BA1A6] hover:text-[#10B981] flex items-center gap-1"
+                      >
+                        <Reply className="w-3 h-3" />
+                        Reply
+                      </button>
+                      {!isOwn && (
+                        <button
+                          onClick={() => setReportingMessage(message)}
+                          className="text-xs text-[#9BA1A6] hover:text-yellow-500 flex items-center gap-1"
+                        >
+                          <Flag className="w-3 h-3" />
+                          Report
+                        </button>
+                      )}
+                      {isOwn && (
+                        <button
+                          onClick={() => handleDelete(message.id)}
+                          className="text-xs text-[#9BA1A6] hover:text-red-500 flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -238,14 +340,34 @@ export default function GroupChatPage() {
         )}
       </div>
 
-      {/* Input */}
       <form onSubmit={handleSend} className="border-t border-[#2C2C2E]" style={{ padding: '20px' }}>
+        {replyingTo && (
+          <div className="mb-3 bg-[#1C1C1E] rounded-lg p-3 border border-[#2C2C2E]">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Reply className="w-4 h-4 text-[#10B981]" />
+                  <span className="text-sm text-[#10B981] font-semibold">
+                    Replying to {replyingTo.profiles?.username}
+                  </span>
+                </div>
+                <p className="text-sm text-[#9BA1A6] truncate">{replyingTo.content}</p>
+              </div>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="text-[#9BA1A6] hover:text-white ml-2"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex items-center" style={{ gap: '12px' }}>
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
+            placeholder={replyingTo ? "Type your reply..." : "Type a message..."}
             className="flex-1 bg-[#1C1C1E] text-white rounded-full outline-none focus:ring-2 focus:ring-[#10B981] border border-[#2C2C2E]"
             style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px' }}
             disabled={sending}
@@ -260,6 +382,80 @@ export default function GroupChatPage() {
           </button>
         </div>
       </form>
+
+      {reportingMessage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setReportingMessage(null)}
+        >
+          <div
+            className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full"
+            style={{ padding: '28px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Flag className="w-6 h-6 text-yellow-500" />
+                </div>
+                <h3 className="text-xl font-bold text-[#FFFFFF]">Report Message</h3>
+              </div>
+
+              <p className="text-[#9BA1A6] text-sm" style={{ marginBottom: '20px' }}>
+                Help us understand what's wrong with this message.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Reason
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] focus:outline-none focus:border-green-500"
+                >
+                  <option value="spam">Spam</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="hate_speech">Hate Speech</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="misinformation">Misinformation</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Provide more context..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-green-500 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setReportingMessage(null)}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#FFFFFF] font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportMessage}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  {isReporting ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

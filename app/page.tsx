@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client'
 import { Home, Users, MessageSquare, Bell, User, Target, Settings, Search } from 'lucide-react'
 import { fetchPosts } from '@/lib/supabase/posts'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
+import { getUnreadNotificationCount } from '@/lib/supabase/notifications'
 import { CreatePost } from '@/components/CreatePost'
 import { PostCard } from '@/components/PostCard'
 import { FeedSkeleton } from '@/components/PostSkeleton'
@@ -18,6 +19,7 @@ export default function HomePage() {
   const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingPosts, setLoadingPosts] = useState(false)
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0)
 
   useEffect(() => {
     const getUser = async () => {
@@ -40,6 +42,39 @@ export default function HomePage() {
     }
     getUser()
   }, [])
+
+  // Fetch unread notification count
+  useEffect(() => {
+    if (!profile) return
+
+    const fetchUnreadCount = async () => {
+      const count = await getUnreadNotificationCount()
+      setUnreadNotifCount(count)
+    }
+
+    fetchUnreadCount()
+
+    // Real-time subscription for notifications
+    const notifsChannel = supabase
+      .channel('unread-notifications-feed')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(notifsChannel)
+    }
+  }, [profile])
 
   useEffect(() => {
     if (!loading) {
@@ -89,8 +124,13 @@ export default function HomePage() {
             <Link href="/settings/account" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
               <Settings className="w-5 h-5 text-[#9BA1A6]" />
             </Link>
-            <Link href="/notifications" className="p-2 hover:bg-[#151718] rounded-lg transition-colors">
+            <Link href="/notifications" className="p-2 hover:bg-[#151718] rounded-lg transition-colors relative">
               <Bell className="w-5 h-5 text-[#9BA1A6]" />
+              {unreadNotifCount > 0 && (
+                <span className="absolute top-1 right-1 bg-[#10B981] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                </span>
+              )}
             </Link>
           </div>
         </div>

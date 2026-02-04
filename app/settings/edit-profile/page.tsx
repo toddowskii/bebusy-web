@@ -25,7 +25,8 @@ export default function EditProfilePage() {
   // Crop modal state
   const [showCropModal, setShowCropModal] = useState(false)
   const [imageToCrop, setImageToCrop] = useState<HTMLImageElement | null>(null)
-  const [cropArea, setCropArea] = useState({ x: 0, y: 0, size: 0 })
+  const [cropType, setCropType] = useState<'avatar' | 'banner'>('avatar')
+  const [cropArea, setCropArea] = useState({ x: 0, y: 0, width: 0, height: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
 
@@ -78,13 +79,15 @@ export default function EditProfilePage() {
 
     img.onload = () => {
       setImageToCrop(img)
+      setCropType('avatar')
       
       // Initialize crop area (centered square)
       const size = Math.min(img.width, img.height)
       setCropArea({
         x: (img.width - size) / 2,
         y: (img.height - size) / 2,
-        size: size
+        width: size,
+        height: size
       })
       
       setShowCropModal(true)
@@ -107,10 +110,26 @@ export default function EditProfilePage() {
       return
     }
 
-    setBannerFile(file)
     const reader = new FileReader()
     reader.onload = (event) => {
-      setBannerPreview(event.target?.result as string)
+      const img = new Image()
+      img.onload = () => {
+        setImageToCrop(img)
+        setCropType('banner')
+        
+        // For banner, use 3:1 aspect ratio (width:height)
+        const bannerHeight = Math.min(img.height, img.width / 3)
+        const bannerWidth = bannerHeight * 3
+        
+        setCropArea({
+          x: (img.width - bannerWidth) / 2,
+          y: (img.height - bannerHeight) / 2,
+          width: bannerWidth,
+          height: bannerHeight
+        })
+        setShowCropModal(true)
+      }
+      img.src = event.target?.result as string
     }
     reader.readAsDataURL(file)
   }
@@ -126,34 +145,64 @@ export default function EditProfilePage() {
       return
     }
 
-    const outputSize = 400
-    canvas.width = outputSize
-    canvas.height = outputSize
+    if (cropType === 'avatar') {
+      // Avatar: Square output 400x400
+      const outputSize = 400
+      canvas.width = outputSize
+      canvas.height = outputSize
 
-    // Draw cropped and resized image
-    ctx.drawImage(
-      imageToCrop,
-      cropArea.x, cropArea.y, cropArea.size, cropArea.size,
-      0, 0, outputSize, outputSize
-    )
+      ctx.drawImage(
+        imageToCrop,
+        cropArea.x, cropArea.y, cropArea.width, cropArea.height,
+        0, 0, outputSize, outputSize
+      )
 
-    // Convert to blob
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        toast.error('Failed to process image')
-        return
-      }
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error('Failed to process image')
+          return
+        }
 
-      const resizedFile = new File([blob], 'avatar.jpg', {
-        type: 'image/jpeg',
-        lastModified: Date.now()
-      })
+        const resizedFile = new File([blob], 'avatar.jpg', {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        })
 
-      setAvatarFile(resizedFile)
-      setAvatarPreview(canvas.toDataURL('image/jpeg'))
-      setShowCropModal(false)
-      setImageToCrop(null)
-    }, 'image/jpeg', 0.9)
+        setAvatarFile(resizedFile)
+        setAvatarPreview(canvas.toDataURL('image/jpeg'))
+        setShowCropModal(false)
+        setImageToCrop(null)
+      }, 'image/jpeg', 0.9)
+    } else {
+      // Banner: 3:1 aspect ratio, max 1200x400
+      const outputWidth = 1200
+      const outputHeight = 400
+      canvas.width = outputWidth
+      canvas.height = outputHeight
+
+      ctx.drawImage(
+        imageToCrop,
+        cropArea.x, cropArea.y, cropArea.width, cropArea.height,
+        0, 0, outputWidth, outputHeight
+      )
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error('Failed to process image')
+          return
+        }
+
+        const resizedFile = new File([blob], 'banner.jpg', {
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        })
+
+        setBannerFile(resizedFile)
+        setBannerPreview(canvas.toDataURL('image/jpeg'))
+        setShowCropModal(false)
+        setImageToCrop(null)
+      }, 'image/jpeg', 0.9)
+    }
   }
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -170,9 +219,33 @@ export default function EditProfilePage() {
     // Check if click is inside crop area
     if (
       x >= cropArea.x &&
-      x <= cropArea.x + cropArea.size &&
+      x <= cropArea.x + cropArea.width &&
       y >= cropArea.y &&
-      y <= cropArea.y + cropArea.size
+      y <= cropArea.y + cropArea.height
+    ) {
+      setIsDragging(true)
+      setDragStart({ x: x - cropArea.x, y: y - cropArea.y })
+    }
+  }
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = cropCanvasRef.current
+    if (!canvas || !imageToCrop || e.touches.length !== 1) return
+
+    const touch = e.touches[0]
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = imageToCrop.width / rect.width
+    const scaleY = imageToCrop.height / rect.height
+    
+    const x = (touch.clientX - rect.left) * scaleX
+    const y = (touch.clientY - rect.top) * scaleY
+
+    // Check if touch is inside crop area
+    if (
+      x >= cropArea.x &&
+      x <= cropArea.x + cropArea.width &&
+      y >= cropArea.y &&
+      y <= cropArea.y + cropArea.height
     ) {
       setIsDragging(true)
       setDragStart({ x: x - cropArea.x, y: y - cropArea.y })
@@ -192,8 +265,30 @@ export default function EditProfilePage() {
     const x = (e.clientX - rect.left) * scaleX
     const y = (e.clientY - rect.top) * scaleY
 
-    const newX = Math.max(0, Math.min(x - dragStart.x, imageToCrop.width - cropArea.size))
-    const newY = Math.max(0, Math.min(y - dragStart.y, imageToCrop.height - cropArea.size))
+    const newX = Math.max(0, Math.min(x - dragStart.x, imageToCrop.width - cropArea.width))
+    const newY = Math.max(0, Math.min(y - dragStart.y, imageToCrop.height - cropArea.height))
+
+    setCropArea(prev => ({ ...prev, x: newX, y: newY }))
+  }
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !imageToCrop || e.touches.length !== 1) return
+
+    e.preventDefault() // Prevent scrolling while dragging
+
+    const touch = e.touches[0]
+    const canvas = cropCanvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = imageToCrop.width / rect.width
+    const scaleY = imageToCrop.height / rect.height
+    
+    const x = (touch.clientX - rect.left) * scaleX
+    const y = (touch.clientY - rect.top) * scaleY
+
+    const newX = Math.max(0, Math.min(x - dragStart.x, imageToCrop.width - cropArea.width))
+    const newY = Math.max(0, Math.min(y - dragStart.y, imageToCrop.height - cropArea.height))
 
     setCropArea(prev => ({ ...prev, x: newX, y: newY }))
   }
@@ -202,17 +297,38 @@ export default function EditProfilePage() {
     setIsDragging(false)
   }
 
+  const handleTouchEnd = () => {
+    setIsDragging(false)
+  }
+
   const handleZoom = (delta: number) => {
     if (!imageToCrop) return
 
-    const newSize = Math.max(100, Math.min(cropArea.size + delta, Math.min(imageToCrop.width, imageToCrop.height)))
-    
-    // Adjust position to keep centered
-    const deltaSize = newSize - cropArea.size
-    const newX = Math.max(0, Math.min(cropArea.x - deltaSize / 2, imageToCrop.width - newSize))
-    const newY = Math.max(0, Math.min(cropArea.y - deltaSize / 2, imageToCrop.height - newSize))
+    if (cropType === 'avatar') {
+      // Avatar: Maintain square aspect ratio
+      const newSize = Math.max(100, Math.min(cropArea.width + delta, Math.min(imageToCrop.width, imageToCrop.height)))
+      
+      const deltaSize = newSize - cropArea.width
+      const newX = Math.max(0, Math.min(cropArea.x - deltaSize / 2, imageToCrop.width - newSize))
+      const newY = Math.max(0, Math.min(cropArea.y - deltaSize / 2, imageToCrop.height - newSize))
 
-    setCropArea({ x: newX, y: newY, size: newSize })
+      setCropArea({ x: newX, y: newY, width: newSize, height: newSize })
+    } else {
+      // Banner: Maintain 3:1 aspect ratio
+      const newHeight = Math.max(100, Math.min(cropArea.height + delta, imageToCrop.height))
+      const newWidth = newHeight * 3
+      
+      // Make sure it fits within image bounds
+      const finalWidth = Math.min(newWidth, imageToCrop.width)
+      const finalHeight = finalWidth / 3
+      
+      const deltaWidth = finalWidth - cropArea.width
+      const deltaHeight = finalHeight - cropArea.height
+      const newX = Math.max(0, Math.min(cropArea.x - deltaWidth / 2, imageToCrop.width - finalWidth))
+      const newY = Math.max(0, Math.min(cropArea.y - deltaHeight / 2, imageToCrop.height - finalHeight))
+
+      setCropArea({ x: newX, y: newY, width: finalWidth, height: finalHeight })
+    }
   }
 
   // Draw crop preview
@@ -247,19 +363,20 @@ export default function EditProfilePage() {
     const displayScale = canvas.width / imageToCrop.width
     const cropX = cropArea.x * displayScale
     const cropY = cropArea.y * displayScale
-    const cropSize = cropArea.size * displayScale
+    const cropWidth = cropArea.width * displayScale
+    const cropHeight = cropArea.height * displayScale
 
-    ctx.clearRect(cropX, cropY, cropSize, cropSize)
+    ctx.clearRect(cropX, cropY, cropWidth, cropHeight)
     ctx.drawImage(
       imageToCrop,
-      cropArea.x, cropArea.y, cropArea.size, cropArea.size,
-      cropX, cropY, cropSize, cropSize
+      cropArea.x, cropArea.y, cropArea.width, cropArea.height,
+      cropX, cropY, cropWidth, cropHeight
     )
 
     // Draw crop border
     ctx.strokeStyle = '#10B981'
     ctx.lineWidth = 3
-    ctx.strokeRect(cropX, cropY, cropSize, cropSize)
+    ctx.strokeRect(cropX, cropY, cropWidth, cropHeight)
     
     // Draw corner handles
     ctx.fillStyle = '#10B981'
@@ -267,15 +384,20 @@ export default function EditProfilePage() {
     // Top-left
     ctx.fillRect(cropX - handleSize/2, cropY - handleSize/2, handleSize, handleSize)
     // Top-right
-    ctx.fillRect(cropX + cropSize - handleSize/2, cropY - handleSize/2, handleSize, handleSize)
+    ctx.fillRect(cropX + cropWidth - handleSize/2, cropY - handleSize/2, handleSize, handleSize)
     // Bottom-left
-    ctx.fillRect(cropX - handleSize/2, cropY + cropSize - handleSize/2, handleSize, handleSize)
+    ctx.fillRect(cropX - handleSize/2, cropY + cropHeight - handleSize/2, handleSize, handleSize)
     // Bottom-right
-    ctx.fillRect(cropX + cropSize - handleSize/2, cropY + cropSize - handleSize/2, handleSize, handleSize)
+    ctx.fillRect(cropX + cropWidth - handleSize/2, cropY + cropHeight - handleSize/2, handleSize, handleSize)
   }, [showCropModal, imageToCrop, cropArea])
 
   const handleSave = async () => {
     if (!profile) return
+
+    if (fullName && !/^[a-zA-Z\s'-]+$/.test(fullName.trim())) {
+      toast.error('Full name can only contain letters, spaces, hyphens, and apostrophes')
+      return
+    }
 
     setSaving(true)
     try {
@@ -461,7 +583,13 @@ export default function EditProfilePage() {
           <input
             type="text"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value
+              // Only allow letters, spaces, hyphens, and apostrophes
+              if (value === '' || /^[a-zA-Z\s'-]*$/.test(value)) {
+                setFullName(value)
+              }
+            }}
             placeholder="Your full name"
             maxLength={50}
             className="w-full bg-[#2C2C2E] text-[#ECEDEE] rounded-xl border border-[#2C2C2E] focus:border-[#10B981] focus:outline-none transition-colors placeholder:text-[#8E8E93]"
@@ -489,9 +617,11 @@ export default function EditProfilePage() {
       {/* Crop Modal */}
       {showCropModal && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-3xl w-full my-8" style={{ padding: '24px' }}>
+          <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-4xl w-full my-8" style={{ padding: '24px' }}>
             <div className="flex items-center justify-between" style={{ marginBottom: '20px' }}>
-              <h3 className="text-xl font-bold text-[#ECEDEE]">Crop Profile Picture</h3>
+              <h3 className="text-xl font-bold text-[#ECEDEE]">
+                {cropType === 'avatar' ? 'Crop Profile Picture' : 'Crop Banner Image'}
+              </h3>
               <button
                 onClick={() => {
                   setShowCropModal(false)
@@ -503,57 +633,70 @@ export default function EditProfilePage() {
               </button>
             </div>
 
-            <div className="flex justify-center" style={{ marginBottom: '20px' }}>
+            <div className="flex justify-center items-center bg-black/50 rounded-xl" style={{ marginBottom: '20px', minHeight: '400px' }}>
               <canvas
                 ref={cropCanvasRef}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                className="max-w-full h-auto cursor-move border-2 border-[#2C2C2E] rounded-xl"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                className="max-w-full max-h-[70vh] h-auto cursor-move rounded-xl"
                 style={{ touchAction: 'none' }}
               />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4" style={{ marginBottom: '16px' }}>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={() => handleZoom(-50)}
-                  className="px-4 py-2 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] rounded-lg transition-colors font-semibold"
+                  className="bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] rounded-xl transition-colors font-bold text-xl flex items-center justify-center"
+                  style={{ width: '40px', height: '40px' }}
                 >
                   −
                 </button>
-                <span className="text-sm text-[#9BA1A6] font-medium">Zoom</span>
+                <span className="text-sm text-[#9BA1A6] font-medium min-w-[60px] text-center">
+                  {cropType === 'avatar' ? '1:1' : '3:1'}
+                </span>
                 <button
                   onClick={() => handleZoom(50)}
-                  className="px-4 py-2 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] rounded-lg transition-colors font-semibold"
+                  className="bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] rounded-xl transition-colors font-bold text-xl flex items-center justify-center"
+                  style={{ width: '40px', height: '40px' }}
                 >
                   +
                 </button>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setShowCropModal(false)
                     setImageToCrop(null)
                   }}
-                  className="px-6 py-2.5 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] font-semibold rounded-full transition-colors"
+                  className="bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] font-semibold rounded-full transition-colors"
+                  style={{ paddingLeft: '32px', paddingRight: '32px', paddingTop: '10px', paddingBottom: '10px' }}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleCropConfirm}
-                  className="px-6 py-2.5 bg-[#10B981] hover:bg-[#059669] text-white font-semibold rounded-full transition-colors"
+                  className="bg-[#10B981] hover:bg-[#059669] text-white font-semibold rounded-full transition-all"
+                  style={{ paddingLeft: '32px', paddingRight: '32px', paddingTop: '10px', paddingBottom: '10px' }}
                 >
-                  Apply
+                  Crop & Apply
                 </button>
               </div>
             </div>
 
-            <p className="text-sm text-[#9BA1A6] text-center">
-              Drag to move • Use zoom buttons to resize the crop area
-            </p>
+            <div className="bg-[#2C2C2E]/50 rounded-lg p-3">
+              <p className="text-sm text-[#9BA1A6] text-center">
+                <span className="text-[#10B981] font-semibold">Drag</span> to reposition • 
+                <span className="text-[#10B981] font-semibold"> +/−</span> to zoom • 
+                <span className="text-[#10B981] font-semibold"> {cropType === 'avatar' ? 'Square' : 'Banner (3:1)'}</span> ratio
+              </p>
+            </div>
           </div>
         </div>
       )}

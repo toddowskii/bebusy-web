@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { getGroup, isMember, joinGroup, leaveGroup, getGroupPosts } from '@/lib/supabase/groups'
+import { getGroup, isMember, joinGroup, leaveGroup, getGroupPosts, getGroupMembers } from '@/lib/supabase/groups'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { PostCard } from '@/components/PostCard'
-import { ArrowLeft, Users, Settings } from 'lucide-react'
+import { ArrowLeft, Users, Settings, X } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { AppLayout } from '@/components/AppLayout'
@@ -21,6 +21,9 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isMemberOfGroup, setIsMemberOfGroup] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
+  const [members, setMembers] = useState<any[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
 
   useEffect(() => {
     loadGroup()
@@ -58,6 +61,20 @@ export default function GroupDetailPage() {
     }
   }
 
+  const handleShowMembers = async () => {
+    setShowMembersModal(true)
+    setLoadingMembers(true)
+    try {
+      const membersData = await getGroupMembers(groupId)
+      setMembers(membersData)
+    } catch (error) {
+      console.error('Error loading members:', error)
+      toast.error('Failed to load members')
+    } finally {
+      setLoadingMembers(false)
+    }
+  }
+
   const handleJoinLeave = async () => {
     if (!currentUser) return
 
@@ -85,6 +102,7 @@ export default function GroupDetailPage() {
       setIsJoining(false)
     }
   }
+
 
   if (loading) {
     return (
@@ -162,10 +180,13 @@ export default function GroupDetailPage() {
 
           {/* Meta Info */}
           <div className="flex flex-wrap gap-4 text-[#8E8E93] text-sm">
-            <div className="flex items-center gap-1.5">
+            <button 
+              onClick={handleShowMembers}
+              className="flex items-center gap-1.5 hover:text-[#10B981] transition-colors"
+            >
               <Users className="w-4 h-4" />
               <span>{group.group_members?.length || 0} members</span>
-            </div>
+            </button>
             <span>·</span>
             <span>Created by @{group.profiles?.username}</span>
           </div>
@@ -190,6 +211,82 @@ export default function GroupDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Members Modal */}
+      {showMembersModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#2C2C2E]" style={{ padding: '20px 24px' }}>
+              <div>
+                <h3 className="text-xl font-bold text-[#ECEDEE]">Members</h3>
+                <p className="text-sm text-[#9BA1A6]" style={{ marginTop: '2px' }}>
+                  {members.length} {members.length === 1 ? 'member' : 'members'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMembersModal(false)}
+                className="p-2 hover:bg-[#2C2C2E] rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-[#9BA1A6]" />
+              </button>
+            </div>
+
+            {/* Members List */}
+            <div className="flex-1 overflow-y-auto" style={{ padding: '12px' }}>
+              {loadingMembers ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="animate-spin h-8 w-8 border-4 border-[#10B981] border-t-transparent rounded-full"></div>
+                </div>
+              ) : members.length === 0 ? (
+                <div className="text-center py-20">
+                  <Users className="w-12 h-12 text-[#9BA1A6] mx-auto" style={{ marginBottom: '12px' }} />
+                  <p className="text-[#9BA1A6]">No members found</p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {members.map((member: any) => (
+                    <Link
+                      key={member.id}
+                      href={`/profile/${member.profiles?.username}`}
+                      onClick={() => setShowMembersModal(false)}
+                      className="flex items-center gap-3 hover:bg-[#2C2C2E] rounded-xl transition-colors"
+                      style={{ padding: '12px' }}
+                    >
+                      {member.profiles?.avatar_url ? (
+                        <img
+                          src={member.profiles.avatar_url}
+                          alt={member.profiles.username}
+                          className="w-14 h-14 rounded-full object-cover ring-2 ring-[#2C2C2E]"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-xl ring-2 ring-[#2C2C2E]">
+                          {member.profiles?.username?.[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-[#ECEDEE] truncate">
+                            {member.profiles?.full_name || member.profiles?.username}
+                          </p>
+                          {member.user_id === group.created_by && (
+                            <span className="text-xs bg-[#10B981]/20 text-[#10B981] rounded-full flex-shrink-0" style={{ paddingLeft: '8px', paddingRight: '8px', paddingTop: '2px', paddingBottom: '2px' }}>
+                              Creator
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-[#9BA1A6] truncate" style={{ marginTop: '2px' }}>
+                          @{member.profiles?.username}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

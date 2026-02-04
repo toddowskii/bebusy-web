@@ -40,37 +40,63 @@ export default function MessagesPage() {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const message = payload.new as any
             const conversationId = message.conversation_id
+            const groupId = message.group_id
 
-            // Update conversations state
-            setConversations(prev => {
-              const index = prev.findIndex(c => c.id === conversationId)
-              if (index === -1) {
-                // New conversation, just return prev without reloading
-                return prev
-              }
+            // Update conversations state for 1-on-1 chats
+            if (conversationId) {
+              setConversations(prev => {
+                const index = prev.findIndex(c => c.id === conversationId)
+                if (index === -1) {
+                  return prev
+                }
 
-              // Update existing conversation
-              const updated = [...prev]
-              const conv = updated[index]
-              
-              // Update last message and unread count
-              if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
-                conv.unreadCount = (conv.unreadCount || 0) + 1
-              } else if (payload.eventType === 'UPDATE' && message.is_read) {
-                // Message was marked as read, decrease count
-                conv.unreadCount = Math.max((conv.unreadCount || 0) - 1, 0)
-              }
-              
-              conv.lastMessage = message
-              conv.updated_at = message.created_at
-              
-              // Sort conversations by most recent
-              updated.sort((a, b) => 
-                new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-              )
-              
-              return updated
-            })
+                const updated = [...prev]
+                const conv = updated[index]
+                
+                if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
+                  conv.unreadCount = (conv.unreadCount || 0) + 1
+                } else if (payload.eventType === 'UPDATE' && message.is_read) {
+                  conv.unreadCount = Math.max((conv.unreadCount || 0) - 1, 0)
+                }
+                
+                conv.lastMessage = message
+                conv.updated_at = message.created_at
+                
+                updated.sort((a, b) => 
+                  new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                )
+                
+                return updated
+              })
+            }
+
+            // Update group chats state for group messages
+            if (groupId) {
+              setGroupChats(prev => {
+                const index = prev.findIndex(g => g.id === groupId)
+                if (index === -1) {
+                  return prev
+                }
+
+                const updated = [...prev]
+                const group = updated[index]
+                
+                if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
+                  group.unreadCount = (group.unreadCount || 0) + 1
+                } else if (payload.eventType === 'UPDATE' && message.is_read) {
+                  group.unreadCount = Math.max((group.unreadCount || 0) - 1, 0)
+                }
+                
+                group.lastMessage = message
+                group.updated_at = message.created_at
+                
+                updated.sort((a, b) => 
+                  new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                )
+                
+                return updated
+              })
+            }
           }
         }
       )

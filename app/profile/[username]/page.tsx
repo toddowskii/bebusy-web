@@ -8,10 +8,11 @@ import { fetchPosts } from '@/lib/supabase/posts'
 import { followUser, unfollowUser, isFollowing } from '@/lib/supabase/profiles'
 import { PostCard } from '@/components/PostCard'
 import { AppLayout } from '@/components/AppLayout'
-import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare, FileText, Image, Heart } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare, FileText, Image, Heart, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
 import { getOrCreateConversation } from '@/lib/supabase/messages'
+import { createReport, type ReportReason } from '@/lib/supabase/reports'
 
 export default function ProfilePage() {
   const params = useParams()
@@ -28,6 +29,10 @@ export default function ProfilePage() {
   const [followingCount, setFollowingCount] = useState(0)
   const [isFollowLoading, setIsFollowLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'posts' | 'media' | 'likes'>('posts')
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState<ReportReason>('spam')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
 
   useEffect(() => {
     loadProfile()
@@ -198,6 +203,32 @@ export default function ProfilePage() {
     }
   }
 
+  const handleReportUser = async () => {
+    if (isReporting || !currentUser || !profile) return
+
+    setIsReporting(true)
+    try {
+      const result = await createReport({
+        reported_user_id: profile.id,
+        content_type: 'user',
+        reason: reportReason,
+        description: reportDescription || undefined
+      })
+
+      if (result.error) throw new Error(result.error)
+
+      toast.success('Report submitted')
+      setShowReportModal(false)
+      setReportReason('spam')
+      setReportDescription('')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit report')
+      console.error(error)
+    } finally {
+      setIsReporting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#000000] flex items-center justify-center">
@@ -283,6 +314,14 @@ export default function ProfilePage() {
                 style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '8px', paddingBottom: '8px' }}
               >
                 {isFollowLoading ? '...' : isFollowingUser ? 'Following' : 'Follow'}
+              </button>
+              <button
+                onClick={() => setShowReportModal(true)}
+                className="bg-[#2C2C2E] hover:bg-yellow-500/10 rounded-full font-semibold transition-colors text-[#ECEDEE] hover:text-yellow-500 flex items-center gap-2"
+                style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '8px', paddingBottom: '8px' }}
+              >
+                <Flag className="w-4 h-4" />
+                Report
               </button>
             </div>
           )}
@@ -419,6 +458,80 @@ export default function ProfilePage() {
             ))}
           </div>
         )
+      )}
+
+      {showReportModal && !isOwnProfile && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowReportModal(false)}
+        >
+          <div
+            className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full"
+            style={{ padding: '28px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                  <Flag className="w-6 h-6 text-yellow-500" />
+                </div>
+                <h3 className="text-xl font-bold text-[#FFFFFF]">Report User</h3>
+              </div>
+
+              <p className="text-[#9BA1A6] text-sm" style={{ marginBottom: '20px' }}>
+                Help us understand what's wrong with this user.
+              </p>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Reason
+                </label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] focus:outline-none focus:border-green-500"
+                >
+                  <option value="spam">Spam</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="hate_speech">Hate Speech</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="misinformation">Misinformation</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                  Additional Details (Optional)
+                </label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Provide more context..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-green-500 resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#FFFFFF] font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportUser}
+                  disabled={isReporting}
+                  className="flex-1 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+                >
+                  {isReporting ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </AppLayout>
   )

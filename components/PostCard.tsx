@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Heart, MessageCircle, Share2, Trash2, AlertTriangle } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Trash2, AlertTriangle, Flag } from 'lucide-react'
 import { likePost, unlikePost, deletePost } from '@/lib/supabase/posts'
 import { supabase } from '@/config/supabase'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import { createReport, type ReportReason } from '@/lib/supabase/reports'
 
 interface PostCardProps {
   post: {
@@ -29,6 +30,10 @@ interface PostCardProps {
 export function PostCard({ post }: PostCardProps) {
   const [isLiked, setIsLiked] = useState(post.is_liked || false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState<ReportReason>('spam')
+  const [reportDescription, setReportDescription] = useState('')
+  const [isReporting, setIsReporting] = useState(false)
   const [likeCount, setLikeCount] = useState(post.likes.length)
   const [isLiking, setIsLiking] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -99,6 +104,33 @@ export function PostCard({ post }: PostCardProps) {
     }
   }
 
+  const handleReport = async () => {
+    if (isReporting) return
+    
+    setIsReporting(true)
+    try {
+      const result = await createReport({
+        reported_user_id: post.user_id,
+        content_type: 'post',
+        content_id: post.id,
+        reason: reportReason,
+        description: reportDescription || undefined
+      })
+
+      if (result.error) throw new Error(result.error)
+      
+      toast.success('Report submitted')
+      setShowReportModal(false)
+      setReportReason('spam')
+      setReportDescription('')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to submit report')
+      console.error(error)
+    } finally {
+      setIsReporting(false)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     const now = new Date()
@@ -160,6 +192,19 @@ export function PostCard({ post }: PostCardProps) {
               title="Delete post"
             >
               <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+
+          {currentUserId && currentUserId !== post.user_id && (
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                setShowReportModal(true)
+              }}
+              className="p-1.5 hover:bg-yellow-500/10 rounded-lg transition-all text-[#8E8E93] hover:text-yellow-500"
+              title="Report post"
+            >
+              <Flag className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -260,6 +305,96 @@ export function PostCard({ post }: PostCardProps) {
                 className="flex-1 px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Report Modal */}
+    {showReportModal && (
+      <div 
+        className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setShowReportModal(false)
+        }}
+      >
+        <div 
+          className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] max-w-md w-full"
+          style={{ padding: '28px' }}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+          }}
+        >
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+              <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <Flag className="w-6 h-6 text-yellow-500" />
+              </div>
+              <h3 className="text-xl font-bold text-[#FFFFFF]">Report Post</h3>
+            </div>
+            
+            <p className="text-[#9BA1A6] text-sm" style={{ marginBottom: '20px' }}>
+              Help us understand what's wrong with this post.
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                Reason
+              </label>
+              <select
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] focus:outline-none focus:border-green-500"
+              >
+                <option value="spam">Spam</option>
+                <option value="harassment">Harassment</option>
+                <option value="hate_speech">Hate Speech</option>
+                <option value="inappropriate">Inappropriate Content</option>
+                <option value="misinformation">Misinformation</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: '24px' }}>
+              <label className="block text-sm font-medium text-[#FFFFFF]" style={{ marginBottom: '8px' }}>
+                Additional Details (Optional)
+              </label>
+              <textarea
+                value={reportDescription}
+                onChange={(e) => setReportDescription(e.target.value)}
+                placeholder="Provide more context..."
+                rows={3}
+                className="w-full px-4 py-3 bg-[#2C2C2E] border border-[#3C3C3E] rounded-xl text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-green-500 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowReportModal(false)
+                }}
+                disabled={isReporting}
+                className="flex-1 px-6 py-3 bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#FFFFFF] font-semibold rounded-full transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleReport()
+                }}
+                disabled={isReporting}
+                className="flex-1 px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+              >
+                {isReporting ? 'Submitting...' : 'Submit Report'}
               </button>
             </div>
           </div>

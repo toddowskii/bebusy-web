@@ -20,12 +20,27 @@ export default function SignupPage() {
     e.preventDefault()
     
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match')
+      toast.error('Passwords don\'t match')
       return
     }
 
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters')
+      return
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      toast.error('Password must contain at least one uppercase letter')
+      return
+    }
+
+    if (!/[0-9]/.test(password)) {
+      toast.error('Password must contain at least one number')
+      return
+    }
+
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      toast.error('Password must contain at least one special character')
       return
     }
 

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { isAdmin, getAllUsers, updateUserRole, banUser, unbanUser } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { fetchFocusGroups } from '@/lib/supabase/focusgroups'
-import { Shield, Users, Target, Plus, Edit, Ban, UserCheck } from 'lucide-react'
+import { Shield, Users, Target, Plus, Edit, Ban, UserCheck, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function AdminDashboard() {
@@ -178,6 +179,13 @@ export default function AdminDashboard() {
             <Target className="w-5 h-5" />
             Focus Groups ({focusGroups.length})
           </button>
+          <Link
+            href="/admin/reports"
+            className="flex items-center gap-2 px-4 py-3 font-medium transition-colors border-b-2 border-transparent text-gray-400 hover:text-white"
+          >
+            <Flag className="w-5 h-5" />
+            Reports
+          </Link>
         </div>
 
         {/* Users Tab */}

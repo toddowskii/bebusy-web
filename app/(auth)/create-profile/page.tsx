@@ -71,6 +71,11 @@ export default function CreateProfilePage() {
       return
     }
 
+    if (fullName && !/^[a-zA-Z\s'-]+$/.test(fullName)) {
+      toast.error('Full name can only contain letters, spaces, hyphens, and apostrophes')
+      return
+    }
+
     if (username.length < 3) {
       toast.error('Username must be at least 3 characters')
       return
@@ -175,7 +180,13 @@ export default function CreateProfilePage() {
               id="fullName"
               type="text"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+              const value = e.target.value
+              // Only allow letters, spaces, hyphens, and apostrophes
+              if (value === '' || /^[a-zA-Z\s'-]*$/.test(value)) {
+                setFullName(value)
+              }
+            }}
               required
               className="w-full bg-[#000000] border border-[#2C2C2E] rounded-[12px] text-[#FFFFFF] placeholder-[#8E8E93] focus:outline-none focus:border-[#10B981] transition-colors"
               style={{ paddingLeft: '48px', paddingRight: '16px', paddingTop: '14px', paddingBottom: '14px' }}

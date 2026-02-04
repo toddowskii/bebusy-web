@@ -8,6 +8,7 @@ import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { Heart, MessageCircle, UserPlus, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AppLayout } from '@/components/AppLayout'
+import { supabase } from '@/lib/supabase/client'
 
 export default function NotificationsPage() {
   const router = useRouter()
@@ -18,6 +19,40 @@ export default function NotificationsPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // Separate useEffect for real-time subscription
+  useEffect(() => {
+    if (!profile) return
+
+    const channel = supabase
+      .channel('notifications-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${profile.id}`,
+        },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            // Fetch the new notification with joins
+            loadData()
+          } else if (payload.eventType === 'UPDATE') {
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === payload.new.id ? { ...n, is_read: payload.new.is_read } : n))
+            )
+          } else if (payload.eventType === 'DELETE') {
+            setNotifications((prev) => prev.filter((n) => n.id !== payload.old.id))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [profile])
 
   const loadData = async () => {
     setLoading(true)
@@ -48,12 +83,18 @@ export default function NotificationsPage() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await markAllAsRead()
+      // Optimistically update UI
       setNotifications(notifications.map(n => ({ ...n, is_read: true })))
+      
+      // Update database
+      await markAllAsRead()
+      
       toast.success('All marked as read')
     } catch (error) {
       console.error('Error marking all as read:', error)
       toast.error('Failed to mark all as read')
+      // Reload on error
+      loadData()
     }
   }
 
@@ -114,12 +155,18 @@ export default function NotificationsPage() {
 
   return (
     <AppLayout username={profile?.username}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-[#ECEDEE]">Notifications</h2>
+      <div className="flex items-center justify-between" style={{ marginBottom: '20px' }}>
+        <div>
+          <h1 className="text-2xl font-bold text-[#ECEDEE]">Notifications</h1>
+          <p className="text-sm text-[#8E8E93]">
+            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+          </p>
+        </div>
         {unreadCount > 0 && (
           <button
             onClick={handleMarkAllAsRead}
-            className="text-sm text-[#10B981] hover:text-[#059669] font-medium"
+            className="bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[#ECEDEE] font-semibold rounded-full transition-colors"
+            style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '8px', paddingBottom: '8px' }}
           >
             Mark all as read
           </button>
@@ -128,13 +175,13 @@ export default function NotificationsPage() {
 
       {/* Notifications List */}
       {notifications.length === 0 ? (
-        <div className="p-12 text-center relative">
-          <Bell className="w-80 h-80 text-[#2D2D2D] mx-auto mb-4 absolute left-1/2 -translate-x-1/2" style={{ top: '80px', zIndex: 0 }} />
-          <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE] relative" style={{ zIndex: 10 }}>No notifications yet</h3>
-          <p className="text-[#9BA1A6] relative" style={{ zIndex: 10 }}>When you get notifications, they'll show up here</p>
+        <div className="bg-[#1C1C1E] rounded-[20px] border border-[#2C2C2E] p-12 text-center">
+          <Bell className="w-16 h-16 text-[#2D2D2D] mx-auto mb-4" />
+          <h3 className="text-xl font-semibold mb-2 text-[#ECEDEE]">No notifications yet</h3>
+          <p className="text-[#9BA1A6]">When you get notifications, they'll show up here</p>
         </div>
       ) : (
-        <div>
+        <div className="space-y-8">
           {notifications.map((notification) => (
             <div
               key={notification.id}
@@ -142,64 +189,65 @@ export default function NotificationsPage() {
                 if (!notification.is_read) {
                   handleMarkAsRead(notification.id)
                 }
-                if (notification.post_id) {
-                  router.push(`/post/${notification.post_id}`)
-                } else if (notification.type === 'follow' && notification.profiles) {
-                  router.push(`/profile/${notification.profiles.username}`)
+                // Navigate based on notification type
+                if (notification.type === 'like' || notification.type === 'comment') {
+                  if (notification.related_id) {
+                    router.push(`/post/${notification.related_id}`)
+                  }
+                } else if (notification.type === 'follow') {
+                  if (notification.profiles?.username) {
+                    router.push(`/profile/${notification.profiles.username}`)
+                  }
                 }
               }}
-              className={`bg-[#1C1C1E] rounded-[20px] p-4 border border-[#2C2C2E] hover:bg-[#252527] transition-all cursor-pointer ${
-                !notification.is_read ? 'ring-2 ring-[#10B981]/20' : ''
+              className={`bg-[#1C1C1E] rounded-[20px] border hover:bg-[#252527] transition-all cursor-pointer ${
+                !notification.is_read ? 'border-[#10B981]/40' : 'border-[#2C2C2E]'
               }`}
-              style={{ marginBottom: '16px' }}
+              style={{ paddingLeft: '18px', paddingRight: '18px', paddingTop: '16px', paddingBottom: '16px' }}
             >
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 mt-1">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-[#2C2C2E] flex items-center justify-center flex-shrink-0">
                   {getNotificationIcon(notification.type)}
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-3">
-                    {notification.profiles?.avatar_url ? (
-                      <img
-                        src={notification.profiles.avatar_url}
-                        alt={notification.profiles.username}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold">
-                        {notification.profiles?.username[0].toUpperCase() || '?'}
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[#FFFFFF]">
-                        <span className="font-semibold">
-                          {notification.profiles?.full_name || notification.profiles?.username}
-                        </span>{' '}
-                        <span className="text-[#9BA1A6]">
-                          {notification.type === 'like' && 'liked your post'}
-                          {notification.type === 'comment' && 'commented on your post'}
-                          {notification.type === 'follow' && 'started following you'}
-                        </span>
-                      </p>
-
-                      {notification.posts?.content && (
-                        <p className="text-[#9BA1A6] text-sm mt-1 line-clamp-1">
-                          "{notification.posts.content}"
-                        </p>
-                      )}
-
-                      <p className="text-[#8E8E93] text-sm mt-1">
-                        {formatTime(notification.created_at)}
-                      </p>
-                    </div>
-
-                    {!notification.is_read && (
-                      <div className="w-2 h-2 bg-[#10B981] rounded-full flex-shrink-0 mt-2"></div>
-                    )}
+                {notification.profiles?.avatar_url ? (
+                  <img
+                    src={notification.profiles.avatar_url}
+                    alt={notification.profiles.username || 'User'}
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {notification.profiles?.username?.[0]?.toUpperCase() || 'S'}
                   </div>
+                )}
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#FFFFFF]">
+                    <span className="font-semibold">
+                      {notification.profiles?.full_name || notification.profiles?.username || 'Someone'}
+                    </span>{' '}
+                    <span className="text-[#9BA1A6]">
+                      {notification.type === 'like' && 'liked your post'}
+                      {notification.type === 'comment' && 'commented on your post'}
+                      {notification.type === 'follow' && 'started following you'}
+                    </span>
+                  </p>
+
+                  {notification.posts?.content && (
+                    <p className="text-[#9BA1A6] text-sm mt-1 line-clamp-1">
+                      "{notification.posts.content}"
+                    </p>
+                  )}
+
+                  <p className="text-[#8E8E93] text-sm mt-1">
+                    {formatTime(notification.created_at)}
+                  </p>
                 </div>
+
+                {!notification.is_read && (
+                  <div className="w-2 h-2 bg-[#10B981] rounded-full flex-shrink-0"></div>
+                )}
               </div>
             </div>
           ))}

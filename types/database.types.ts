@@ -249,7 +249,9 @@ export interface Database {
       messages: {
         Row: {
           id: string
-          conversation_id: string
+          conversation_id: string | null
+          group_id: string | null
+          parent_message_id: string | null
           sender_id: string
           content: string | null
           is_read: boolean
@@ -260,7 +262,9 @@ export interface Database {
         }
         Insert: {
           id?: string
-          conversation_id: string
+          conversation_id?: string | null
+          group_id?: string | null
+          parent_message_id?: string | null
           sender_id: string
           content?: string | null
           is_read?: boolean
@@ -271,7 +275,9 @@ export interface Database {
         }
         Update: {
           id?: string
-          conversation_id?: string
+          conversation_id?: string | null
+          group_id?: string | null
+          parent_message_id?: string | null
           sender_id?: string
           content?: string | null
           is_read?: boolean

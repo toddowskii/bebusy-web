@@ -43,18 +43,26 @@ export async function getUserGroupChats() {
       return [];
     }
 
-    // For each group, get the last message
+    // For each group, get the last message and unread count
     const groupsWithLastMessage = await Promise.all(
       (groupMemberships || []).map(async (membership: any) => {
         const group = membership.groups;
         
-        // Get last message in group (via posts)
-        const { data: posts } = await supabase
-          .from('posts')
-          .select('id, content, created_at, user_id')
+        // Get last message in group from messages table
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('id, content, created_at, sender_id, file_url, file_type, file_name')
           .eq('group_id', group.id)
           .order('created_at', { ascending: false })
           .limit(1);
+
+        // Get unread count for this group
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('group_id', group.id)
+          .eq('is_read', false)
+          .neq('sender_id', userId);
 
         return {
           id: group.id,
@@ -62,8 +70,9 @@ export async function getUserGroupChats() {
           name: group.name,
           description: group.description,
           members_count: group.members_count,
-          lastMessage: posts?.[0] || null,
-          updated_at: (posts?.[0] as any)?.created_at || (group as any).created_at,
+          lastMessage: messages?.[0] || null,
+          unreadCount: unreadCount || 0,
+          updated_at: (messages?.[0] as any)?.created_at || (group as any).created_at,
         };
       })
     );
@@ -181,6 +190,38 @@ export async function markMessagesAsRead(conversationId: string) {
 }
 
 /**
+ * Mark all messages in a group as read
+ */
+export async function markGroupMessagesAsRead(groupId: string) {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    const userId = session?.session?.user?.id;
+
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { error } = await supabase
+      .from('messages')
+      // @ts-expect-error - Supabase type issue
+      .update({ is_read: true })
+      .eq('group_id', groupId)
+      .eq('is_read', false)
+      .neq('sender_id', userId);
+
+    if (error) {
+      console.error('Error marking group messages as read:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, error: null };
+  } catch (error) {
+    console.error('Error in markGroupMessagesAsRead:', error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
  * Get all conversations for current user
  */
 export async function getConversations() {
@@ -268,6 +309,14 @@ export async function getMessages(conversationId: string) {
         username,
         full_name,
         avatar_url
+      ),
+      parent_message:parent_message_id (
+        id,
+        content,
+        sender_id,
+        profiles:sender_id (
+          username
+        )
       )
     `)
     .eq('conversation_id', conversationId)
@@ -285,7 +334,8 @@ export async function sendMessage(
   content?: string | null, 
   fileUrl?: string | null,
   fileType?: string | null,
-  fileName?: string | null
+  fileName?: string | null,
+  parentMessageId?: string | null
 ) {
   const { data: session } = await supabase.auth.getSession();
   const userId = session?.session?.user?.id;
@@ -317,6 +367,7 @@ export async function sendMessage(
       file_url: fileUrl || null,
       file_type: fileType || null,
       file_name: fileName || null,
+      parent_message_id: parentMessageId || null,
     } as any)
     .select(`
       *,
@@ -325,6 +376,14 @@ export async function sendMessage(
         username,
         full_name,
         avatar_url
+      ),
+      parent_message:parent_message_id (
+        id,
+        content,
+        sender_id,
+        profiles:sender_id (
+          username
+        )
       )
     `)
     .single();
@@ -350,6 +409,107 @@ export async function sendMessage(
 }
 
 /**
+ * Get messages for a group chat (focus groups)
+ */
+export async function getGroupMessages(groupId: string) {
+  const { data, error } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      profiles:sender_id (
+        id,
+        username,
+        full_name,
+        avatar_url
+      ),
+      parent_message:parent_message_id (
+        id,
+        content,
+        sender_id,
+        profiles:sender_id (
+          username
+        )
+      )
+    `)
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+/**
+ * Send a message to a group (focus groups)
+ */
+export async function sendGroupMessage(
+  groupId: string,
+  content?: string | null,
+  fileUrl?: string | null,
+  fileType?: string | null,
+  fileName?: string | null,
+  parentMessageId?: string | null
+) {
+  const { data: session } = await supabase.auth.getSession();
+  const userId = session?.session?.user?.id;
+
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
+
+  // Check if user is banned
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  if ((profile as any)?.role === 'banned') {
+    throw new Error('Your account has been banned');
+  }
+
+  // Verify user is a member of the group
+  const { data: membership } = await supabase
+    .from('group_members')
+    .select('id')
+    .eq('group_id', groupId)
+    .eq('user_id', userId)
+    .single();
+
+  if (!membership) {
+    throw new Error('You must be a member of this group');
+  }
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      group_id: groupId,
+      sender_id: userId,
+      content: content,
+      file_url: fileUrl,
+      file_type: fileType,
+      file_name: fileName,
+      parent_message_id: parentMessageId,
+      is_read: true
+    } as any)
+    .select(`
+      *,
+      profiles:sender_id (
+        id,
+        username,
+        full_name,
+        avatar_url
+      )
+    `)
+    .single();
+
+  if (error) {
+    console.error('Database error sending group message:', error);
+    throw new Error(error.message || 'Failed to send message');
+  }
+  return data;
+}
+
+/**
  * Delete a message
  */
 export async function deleteMessage(messageId: string) {
@@ -360,15 +520,26 @@ export async function deleteMessage(messageId: string) {
     throw new Error('User not authenticated');
   }
 
-  // Verify user owns the message
-  const { data: message } = await supabase
-    .from('messages')
-    .select('sender_id')
-    .eq('id', messageId)
+  // Check if user is admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
     .single();
 
-  if ((message as any)?.sender_id !== userId) {
-    throw new Error('Unauthorized');
+  const isAdmin = (profile as any)?.role === 'admin';
+
+  // Verify user owns the message or is admin
+  if (!isAdmin) {
+    const { data: message } = await supabase
+      .from('messages')
+      .select('sender_id')
+      .eq('id', messageId)
+      .single();
+
+    if ((message as any)?.sender_id !== userId) {
+      throw new Error('Unauthorized');
+    }
   }
 
   const { error } = await supabase
