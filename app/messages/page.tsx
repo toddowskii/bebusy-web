@@ -20,6 +20,10 @@ export default function MessagesPage() {
 
   useEffect(() => {
     loadData()
+  }, [])
+
+  useEffect(() => {
+    if (!profile) return
 
     // Subscribe to new messages in real-time
     const channel = supabase
@@ -41,8 +45,7 @@ export default function MessagesPage() {
             setConversations(prev => {
               const index = prev.findIndex(c => c.id === conversationId)
               if (index === -1) {
-                // New conversation, reload all data
-                loadData()
+                // New conversation, just return prev without reloading
                 return prev
               }
 
@@ -51,7 +54,7 @@ export default function MessagesPage() {
               const conv = updated[index]
               
               // Update last message and unread count
-              if (payload.eventType === 'INSERT' && message.sender_id !== profile?.id) {
+              if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
                 conv.unreadCount = (conv.unreadCount || 0) + 1
               } else if (payload.eventType === 'UPDATE' && message.is_read) {
                 // Message was marked as read, decrease count
