@@ -15,6 +15,7 @@ export default function GroupChatPage() {
   const router = useRouter()
   const groupId = params.id as string
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [group, setGroup] = useState<any>(null)
@@ -252,7 +253,7 @@ export default function GroupChatPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ padding: '20px' }}>
+      <div className="flex-1 overflow-y-auto" style={{ padding: '20px', paddingBottom: 'calc(20px + 140px)' }}>
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-muted-foreground">No messages yet. Say hi! 👋</p>
@@ -340,7 +341,7 @@ export default function GroupChatPage() {
         )}
       </div>
 
-      <form onSubmit={handleSend} className="border-t border-border" style={{ padding: '20px' }}>
+      <form onSubmit={handleSend} className="border-t border-border sticky bottom-0 z-20" style={{ padding: '20px', backgroundColor: 'var(--bg-primary)', paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }}>
         {replyingTo && (
           <div className="mb-3 bg-card rounded-lg p-3 border border-border">
             <div className="flex items-start justify-between">
@@ -364,12 +365,14 @@ export default function GroupChatPage() {
         )}
         <div className="flex items-center" style={{ gap: '12px' }}>
           <input
+            ref={inputRef}
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onFocus={() => { setTimeout(() => scrollToBottom(), 120) }}
             placeholder={replyingTo ? "Type your reply..." : "Type a message..."}
             className="flex-1 bg-card text-white rounded-full outline-none focus:ring-2 focus:ring-primary border border-border"
-            style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px' }}
+            style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '14px', paddingBottom: '14px' }}
             disabled={sending}
           />
           <button

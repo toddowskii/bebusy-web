@@ -32,6 +32,8 @@ export default function PostDetailPage() {
   const [reportDescription, setReportDescription] = useState('')
   const [isReporting, setIsReporting] = useState(false)
   const [likingCommentId, setLikingCommentId] = useState<string | null>(null)
+  // For delete confirmation modal
+  const [commentToDelete, setCommentToDelete] = useState<any>(null)
 
   useEffect(() => {
     loadPost()
@@ -130,12 +132,55 @@ export default function PostDetailPage() {
     }
   }
 
-  const handleDeleteComment = async (commentId: string) => {
+  const handleDeleteComment = async (commentId: string, options: { withUndo?: boolean } = { withUndo: true }) => {
+    // Snapshot the comment and its index for potential undo
+    const prevComments = comments
+    const index = prevComments.findIndex(c => c.id === commentId)
+    const deletedComment = prevComments.find(c => c.id === commentId)
+
+    // Optimistically remove from UI
+    setComments(prev => prev.filter(c => c.id !== commentId))
+
     try {
       await deleteComment(commentId)
-      setComments(comments.filter(c => c.id !== commentId))
-      toast.success('Comment deleted')
+
+      if (options.withUndo && deletedComment) {
+        // Show a toast with an Undo button
+        toast((t) => (
+          <div>
+            Comment deleted
+            <button
+              onClick={async () => {
+                try {
+                  const restored = await createComment(postId, deletedComment.content)
+                  setComments(prev => {
+                    const copy = [...prev]
+                    copy.splice(index >= 0 ? index : copy.length, 0, restored)
+                    return copy
+                  })
+                  toast.dismiss(t.id)
+                  toast.success('Comment restored')
+                } catch (err) {
+                  console.error('Failed to restore comment:', err)
+                  toast.error('Failed to restore comment')
+                }
+              }}
+              className="ml-3 underline"
+            >
+              Undo
+            </button>
+          </div>
+        ), { duration: 6000 })
+      } else {
+        toast.success('Comment deleted')
+      }
     } catch (error) {
+      // Revert optimistic change on error
+      setComments(prev => {
+        const copy = [...prev]
+        if (deletedComment) copy.splice(index >= 0 ? index : 0, 0, deletedComment)
+        return copy
+      })
       console.error('Error deleting comment:', error)
       toast.error('Failed to delete comment')
     }
@@ -346,7 +391,26 @@ export default function PostDetailPage() {
             <button className="flex items-center gap-2 text-muted-foreground hover:text-blue-500 transition-colors">
               <MessageCircle className="w-5 h-5" />
             </button>
-            <button className="flex items-center gap-2 text-muted-foreground hover:text-green-500 transition-colors">
+            <button
+              onClick={async () => {
+                const url = `${window.location.origin}/post/${postId}`
+                // Prefer calling navigator.share first (inside the click handler) to keep the user gesture
+                if (typeof navigator !== 'undefined' && (navigator as any).share) {
+                  try {
+                    await (navigator as any).share({ title: post.profiles?.username ? `Post by ${post.profiles.username}` : 'BeBusy post', text: (post.content || '').slice(0, 140), url })
+                    toast.success('Opened native share sheet')
+                    return
+                  } catch (err: any) {
+                    console.warn('navigator.share failed or cancelled:', err)
+                    if (err && err.name === 'AbortError') return
+                  }
+                }
+
+                const result = await (await import('@/lib/utils/share')).shareUrl({ title: post.profiles?.username ? `Post by ${post.profiles.username}` : 'BeBusy post', text: (post.content || '').slice(0, 140), url })
+                console.log('Share result (post page):', result)
+              }}
+              className="flex items-center gap-2 text-muted-foreground hover:text-green-500 transition-colors"
+            >
               <Share2 className="w-5 h-5" />
             </button>
           </div>
@@ -427,9 +491,9 @@ export default function PostDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {comments.map((comment) => (
-                <div key={comment.id} className="rounded-[20px] border shadow-sm hover:bg-[#252527] transition-all group" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+                <div key={comment.id} className="rounded-[20px] border shadow-sm hover:bg-[#252527] transition-all group" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '20px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
                   {editingComment?.id === comment.id ? (
                     /* Edit Mode */
                     <div className="flex gap-3">
@@ -505,7 +569,7 @@ export default function PostDetailPage() {
                             </span>
                           </div>
                         </div>
-                        <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed text-[15px] mb-2">{comment.content}</p>
+                        <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed text-[15px] mb-3">{comment.content}</p>
                         
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -547,7 +611,7 @@ export default function PostDetailPage() {
                                 Edit
                               </button>
                               <button
-                                onClick={() => handleDeleteComment(comment.id)}
+                                onClick={() => setCommentToDelete(comment)}
                                 className="text-xs text-muted-foreground hover:text-red-500 flex items-center gap-1 transition-colors"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -644,6 +708,61 @@ export default function PostDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Comment Modal */}
+      {commentToDelete && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setCommentToDelete(null)}
+        >
+          <div 
+            className="rounded-[20px] border max-w-md w-full"
+            style={{ padding: '28px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Delete Comment</h3>
+              </div>
+              
+              <p className="text-sm" style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>
+                Are you sure you want to delete this comment? This action cannot be undone.
+              </p>
+
+              <div style={{ marginBottom: '16px' }}>
+                <p className="text-sm text-muted-foreground" style={{ color: 'var(--text-primary)' }}>
+                  "{commentToDelete?.content?.slice(0, 200)}"
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setCommentToDelete(null)}
+                  className="flex-1 px-8 py-4 font-semibold rounded-full transition-colors text-base"
+                  style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!commentToDelete) return
+                    const id = commentToDelete.id
+                    setCommentToDelete(null)
+                    await handleDeleteComment(id)
+                  }}
+                  className="flex-1 px-8 py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full transition-all shadow-lg text-base"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

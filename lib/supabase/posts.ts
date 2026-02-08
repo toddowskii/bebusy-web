@@ -94,20 +94,24 @@ export async function createPost(content: string, imageUrl?: string | null, grou
     return { data: null, error: new Error('Scripts are not allowed in posts.') };
   }
 
-  const sanitizedContent = sanitizePlainText(content);
+  let sanitizedContent = sanitizePlainText(content);
 
   if (!sanitizedContent && !imageUrl) {
     return { data: null, error: new Error('Post must include text or an image.') };
   }
 
   if (sanitizedContent) {
-    // Validate and sanitize content
-    const validation = validateContent(sanitizedContent);
-    if (!validation.isValid) {
-      return { data: null, error: new Error(validation.error) };
+    // Run async profanity check (server-side or via moderation API)
+    const { checkProfanity } = await import('@/lib/security/moderation')
+    const result = await checkProfanity(sanitizedContent)
+    if (result.isProfane) {
+      // Auto-clean profane words and proceed with cleaned content
+      console.log('Profanity detected - applying automatic cleanup')
+      sanitizedContent = result.cleaned
     }
   }
 
+  // If profanity was detected, use the cleaned content before inserting
   const newPost: PostInsert = {
     user_id: userId,
     content: sanitizedContent,
@@ -134,7 +138,10 @@ export async function createPost(content: string, imageUrl?: string | null, grou
     return { data: null, error };
   }
 
-  return { data: data as PostWithProfile, error: null };
+  // Indicate if content was auto-cleaned by moderation
+  const wasCleaned = sanitizedContent !== sanitizePlainText(content);
+
+  return { data: data as PostWithProfile, error: null, cleaned: wasCleaned } as any;
 }
 
 /**

@@ -8,7 +8,7 @@ import { fetchPosts } from '@/lib/supabase/posts'
 import { followUser, unfollowUser, isFollowing } from '@/lib/supabase/profiles'
 import { PostCard } from '@/components/PostCard'
 import { AppLayout } from '@/components/AppLayout'
-import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare, FileText, Image, Heart, Flag, Users, X, Flame, Briefcase, Star } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, Settings, MessageSquare, FileText, Image, Heart, Flag, Users, X, Flame, Briefcase, Star, Share2 } from 'lucide-react'
 import { categorizeTag, badgeClassForCategory } from '@/lib/tagCategories'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -394,6 +394,28 @@ export default function ProfilePage() {
               >
                 <Flag className="w-4 h-4" />
                 Report
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const url = typeof window !== 'undefined' ? `${window.location.origin}/profile/${profile.username}` : `/profile/${profile.username}`
+                    if (navigator.share) {
+                      await navigator.share({ title: profile.full_name || profile.username, text: `Check out ${profile.full_name || profile.username} on BeBusy`, url })
+                    } else if (navigator.clipboard) {
+                      await navigator.clipboard.writeText(url)
+                      toast.success('Profile link copied to clipboard')
+                    } else {
+                      window.prompt('Copy this link', url)
+                    }
+                  } catch (err) {
+                    console.error('Share failed', err)
+                    toast.error('Share failed')
+                  }
+                }}
+                className="max-w-[180px] sm:max-w-none w-full sm:w-auto bg-muted rounded-full font-semibold transition-colors text-foreground flex items-center justify-center gap-2 text-sm sm:text-base px-4 py-2 sm:px-4"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
               </button>
             </div>
           )}

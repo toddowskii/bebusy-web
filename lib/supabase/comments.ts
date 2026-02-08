@@ -26,10 +26,12 @@ export async function createComment(postId: string, content: string) {
     throw new Error('Your account has been banned. You cannot post comments.');
   }
 
-  // Validate and sanitize content
-  const validation = validateContent(content);
-  if (!validation.isValid) {
-    throw new Error(validation.error);
+  // Async profanity check (server-side or via moderation API)
+  const { checkProfanity } = await import('@/lib/security/moderation')
+  const profanity = await checkProfanity(content)
+  if (profanity.isProfane) {
+    console.log('Profanity detected in comment - applying automatic cleanup')
+    content = profanity.cleaned
   }
 
   const sanitizedContent = sanitizePlainText(content);
@@ -209,10 +211,12 @@ export async function updateComment(commentId: string, content: string) {
     throw new Error('Unauthorized');
   }
 
-  // Validate and sanitize content
-  const validation = validateContent(content);
-  if (!validation.isValid) {
-    throw new Error(validation.error);
+  // Async profanity check (auto-clean on match)
+  const { checkProfanity } = await import('@/lib/security/moderation')
+  const profanity = await checkProfanity(content)
+  if (profanity.isProfane) {
+    console.log('Profanity detected in comment update - applying automatic cleanup')
+    content = profanity.cleaned
   }
 
   const sanitizedContent = sanitizePlainText(content);

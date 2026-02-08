@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import pkg from '../../../package.json'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -175,7 +176,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="font-medium" style={{ color: 'var(--text-primary)' }}>About BeBusy</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Version 1.0.0</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Version {pkg.version}</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />

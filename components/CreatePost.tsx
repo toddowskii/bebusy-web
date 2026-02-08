@@ -88,7 +88,21 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
   }
 
   const handleClose = () => {
+    if (isSubmitting) return
+
     if (!content.trim() && !imageFile) {
+      setIsExpanded(false)
+      return
+    }
+
+    // Confirm before discarding user's content
+    // eslint-disable-next-line no-alert
+    const confirmed = typeof window !== 'undefined' && window.confirm('Discard your draft?')
+    if (confirmed) {
+      setContent('')
+      setImageFile(null)
+      setImagePreview(null)
+      if (fileInputRef.current) fileInputRef.current.value = ''
       setIsExpanded(false)
     }
   }
@@ -130,7 +144,13 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
         imageUrl = publicUrl
       }
 
-      await createPost(content.trim(), imageUrl)
+      const res = await createPost(content.trim(), imageUrl)
+
+      if (res.error) throw res.error
+
+      if (res.cleaned) {
+        toast('Some words were removed from your post for violating community guidelines', { icon: '⚠️' })
+      }
 
       setContent('')
       setImageFile(null)
@@ -286,10 +306,10 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
               <button
                 type="button"
                 onClick={handleClose}
-                disabled={isSubmitting || (!content.trim() && !imageFile)}
+                disabled={isSubmitting}
                 className="rounded-full font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', paddingLeft: '20px', paddingRight: '20px', paddingTop: '8px', paddingBottom: '8px' }}
-                onMouseEnter={(e) => !(isSubmitting || (!content.trim() && !imageFile)) && (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                onMouseEnter={(e) => !isSubmitting && (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
               >
                 Cancel

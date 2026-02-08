@@ -252,10 +252,33 @@ export function PostCard({ post }: PostCardProps) {
             <span className="text-sm font-medium">{post.comments.length}</span>
           </button>
 
-          <button className="flex items-center gap-2 hover:text-green-500 transition-colors" style={{ color: 'var(--text-muted)' }}>
-            <Share2 className="w-5 h-5" />
-            <span className="text-sm font-medium">{post.comments.length > 0 ? '2' : ''}</span>
-          </button>
+          <div className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+            {/* Share button: uses native Web Share API when available, falls back to copy */}
+            <button
+              onClick={async (e) => {
+                e.preventDefault()
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/post/${post.id}` : `/post/${post.id}`
+                // First try native share synchronously to preserve gesture
+                if (typeof navigator !== 'undefined' && (navigator as any).share) {
+                  try {
+                    await (navigator as any).share({ title: `Post by ${post.profiles?.username || 'user'}`, text: post.content.slice(0, 140), url })
+                    toast.success('Opened native share sheet')
+                    return
+                  } catch (err: any) {
+                    console.warn('navigator.share failed or cancelled:', err)
+                    if (err && err.name === 'AbortError') return
+                  }
+                }
+
+                const { shareUrl } = await import('@/lib/utils/share')
+                const result = await shareUrl({ title: `Post by ${post.profiles?.username || 'user'}`, text: post.content.slice(0, 140), url })
+                console.log('Share result (post card):', result)
+              }}
+              className="flex items-center gap-2 hover:text-green-500 transition-colors"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </Link>

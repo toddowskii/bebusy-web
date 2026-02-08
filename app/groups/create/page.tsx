@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createGroup } from '@/lib/supabase/groups'
 import { TAG_OPTIONS } from '@/lib/tagCategories'
 import TagPicker from '@/components/TagPicker'
 import { ArrowLeft } from 'lucide-react'
+import { AppLayout } from '@/components/AppLayout'
 import toast from 'react-hot-toast'
 
 export default function CreateGroupPage() {
@@ -15,8 +16,8 @@ export default function CreateGroupPage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
 
     if (!name.trim()) {
       toast.error('Group name is required')
@@ -47,64 +48,78 @@ export default function CreateGroupPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ minHeight: '100dvh', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-      <div className="max-w-[600px] mx-auto border-x" style={{ borderColor: 'var(--border)' }}>
-        {/* Header */}
-        <div className="sticky top-0 backdrop-blur-md border-b p-4 z-10 flex items-center justify-between" style={{ backgroundColor: 'rgba(0, 0, 0, 0.95)', borderColor: 'var(--border)', paddingTop: 'calc(12px + env(safe-area-inset-top))' }}>
-          <div className="flex items-center gap-4">
+    <AppLayout>
+      <main className="min-h-[70vh] flex items-start justify-center" style={{ paddingTop: '40px' }}>
+        <div className="w-full max-w-[1100px] px-6 mx-auto">
+          <div className="flex items-center gap-3 mb-4">
             <button onClick={() => router.back()} className="p-2 rounded-full transition-colors" style={{ backgroundColor: 'var(--bg-secondary)' }}>
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <h2 className="text-xl font-bold">Create Group</h2>
+            <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Create Group</h2>
           </div>
-          <button
-            onClick={handleSubmit}
-            disabled={creating || !name.trim()}
-            className="px-6 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-full hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all shadow-lg shadow-green-500/20"
-          >
-            {creating ? 'Creating...' : 'Create'}
-          </button>
+
+          <div className="rounded-[24px] border overflow-hidden shadow-md mx-auto" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+              {/* Group Name */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Group Name *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter group name"
+                  maxLength={50}
+                  className="w-full px-4 py-3 rounded-lg border focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-colors"
+                  style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
+                  required
+                />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{name.length}/50</p>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What is this group about?"
+                  maxLength={200}
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-lg border focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-colors resize-none"
+                  style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
+                />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{description.length}/200</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Tags</label>
+                <TagPicker value={selectedTags} onChange={setSelectedTags} options={TAG_OPTIONS} placeholder="Filter by tags (comma-separated) e.g. react, python, machine_learning" />
+              </div>
+
+              <div className="pt-6 border-t" style={{ borderColor: 'var(--border)' }}>
+                <div className="flex gap-0">
+                  <button
+                    type="button"
+                    onClick={() => router.back()}
+                    className="flex-1 px-8 py-4 rounded-l-full text-base font-semibold"
+                    style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={creating || !name.trim()}
+                    className="flex-1 px-8 py-4 rounded-r-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all shadow-lg"
+                  >
+                    {creating ? 'Creating...' : 'Create Group'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 space-y-6" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
-          {/* Group Name */}
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Group Name *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter group name"
-              maxLength={50}
-              className="w-full px-4 py-3 rounded-lg border focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-colors"
-              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
-              required
-            />
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{name.length}/50</p>
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this group about?"
-              maxLength={200}
-              rows={4}
-              className="w-full px-4 py-3 rounded-lg border focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-colors resize-none"
-              style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
-            />
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{description.length}/200</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Tags</label>
-            <TagPicker value={selectedTags} onChange={setSelectedTags} options={TAG_OPTIONS} placeholder="Filter by tags (comma-separated) e.g. react, python, machine_learning" />
-          </div>
-        </form>
-      </div>
-    </div>
+      </main>
+    </AppLayout>
   )
 }

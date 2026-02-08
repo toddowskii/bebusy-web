@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import DevErrorFilter from '@/components/DevErrorFilter'
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +47,8 @@ export default function RootLayout({
               },
             }}
           />
+          {/* Dev-only error filter to ignore noisy extension errors in dev */}
+          <DevErrorFilter />
           {children}
         </ThemeProvider>
       </body>

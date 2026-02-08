@@ -15,6 +15,7 @@ export default function ChatPage() {
   const router = useRouter()
   const conversationId = params.id as string
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [otherUser, setOtherUser] = useState<any>(null)
@@ -509,12 +510,14 @@ export default function ChatPage() {
             )}
           </button>
           <input
+            ref={inputRef}
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onFocus={() => setTimeout(() => scrollToBottom(), 120)}
             placeholder={uploading ? "Uploading file..." : replyingTo ? "Type your reply..." : "Type a message..."}
             className="flex-1 text-white rounded-full outline-none focus:ring-2 focus:ring-[#10B981] border"
-            style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+            style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '14px', paddingBottom: '14px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
             disabled={sending || uploading}
           />
           <button
