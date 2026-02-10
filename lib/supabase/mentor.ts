@@ -54,6 +54,18 @@ export async function createMentorFocusGroup(focusGroup: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
+  // Enforce admin-only creation server-side
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  const role = (profile as any)?.role
+  if (role !== 'mentor' && role !== 'admin') {
+    throw new Error('Only mentors or admins can create focus groups')
+  }
+
   // First, create the associated group for communication
   const { data: groupData, error: groupError } = await supabase
     .from('groups')

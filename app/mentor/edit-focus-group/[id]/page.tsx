@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { updateMentorFocusGroup, deleteMentorFocusGroup } from '@/lib/supabase/mentor'
 import { getFocusGroup } from '@/lib/supabase/focusgroups'
 import { ArrowLeft, Calendar, Users, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function MentorEditFocusGroupPage({ params }: { params: { id: string } }) {
+export default function MentorEditFocusGroupPage() {
   const router = useRouter()
+  const params = useParams() as { id?: string }
   const [loading, setLoading] = useState(true)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -21,10 +22,12 @@ export default function MentorEditFocusGroupPage({ params }: { params: { id: str
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    if (!params?.id) return
     loadFocusGroup()
-  }, [params.id])
+  }, [params?.id])
 
   const loadFocusGroup = async () => {
+    if (!params?.id) return
     try {
       const group = await getFocusGroup(params.id)
       if (!group) {
@@ -58,6 +61,11 @@ export default function MentorEditFocusGroupPage({ params }: { params: { id: str
 
     setUpdating(true)
     try {
+      if (!params?.id) {
+        toast.error('Missing group id')
+        return
+      }
+
       await updateMentorFocusGroup(params.id, {
         title: title.trim(),
         description: description.trim(),
@@ -80,6 +88,11 @@ export default function MentorEditFocusGroupPage({ params }: { params: { id: str
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this focus group? This action cannot be undone.')) {
+      return
+    }
+
+    if (!params?.id) {
+      toast.error('Missing group id')
       return
     }
 

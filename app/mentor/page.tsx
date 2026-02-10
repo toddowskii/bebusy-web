@@ -62,14 +62,16 @@ export default function MentorDashboardPage() {
           <p className="text-muted-foreground">Manage your focus groups</p>
         </div>
 
-        <Link
-          href="/mentor/create-focus-group"
-          className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white rounded-full font-semibold transition-colors shadow-lg"
-          style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px' }}
-        >
-          <Plus className="w-5 h-5" />
-          Create Focus Group
-        </Link>
+        {(profile?.role === 'admin' || profile?.role === 'mentor') && (
+          <Link
+            href="/mentor/create-focus-group"
+            className="flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white rounded-full font-semibold transition-colors shadow-lg"
+            style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '12px' }}
+          >
+            <Plus className="w-5 h-5" />
+            Create Focus Group
+          </Link>
+        )}
       </div>
 
       {/* Focus Groups */}
@@ -86,14 +88,16 @@ export default function MentorDashboardPage() {
             <div className="text-5xl" style={{ marginBottom: '16px' }}>🎯</div>
             <h3 className="text-xl font-semibold text-foreground" style={{ marginBottom: '8px' }}>No focus groups yet</h3>
             <p className="text-muted-foreground" style={{ marginBottom: '24px' }}>Create your first focus group to start mentoring</p>
-            <Link
-              href="/mentor/create-focus-group"
-              className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white rounded-full font-semibold transition-colors"
-              style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '12px', paddingBottom: '12px' }}
-            >
-              <Plus className="w-5 h-5" />
-              Create Focus Group
-            </Link>
+            {(profile?.role === 'admin' || profile?.role === 'mentor') && (
+              <Link
+                href="/mentor/create-focus-group"
+                className="inline-flex items-center gap-2 bg-primary hover:bg-primary-hover text-white rounded-full font-semibold transition-colors"
+                style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '12px', paddingBottom: '12px' }}
+              >
+                <Plus className="w-5 h-5" />
+                Create Focus Group
+              </Link>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ padding: '24px' }}>

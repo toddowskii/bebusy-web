@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createGroup } from '@/lib/supabase/groups'
+import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { TAG_OPTIONS } from '@/lib/tagCategories'
 import TagPicker from '@/components/TagPicker'
 import { ArrowLeft } from 'lucide-react'
@@ -15,9 +16,37 @@ export default function CreateGroupPage() {
   const [description, setDescription] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [creating, setCreating] = useState(false)
+  const [profile, setProfile] = useState<any>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoadingProfile(true)
+        const prof = await getCurrentProfile()
+        setProfile(prof)
+        if (prof && prof.role !== 'admin') {
+          toast.error('Only admins can create groups')
+          router.push('/')
+          return
+        }
+      } catch (err) {
+        // ignore
+      } finally {
+        setLoadingProfile(false)
+      }
+    }
+
+    init()
+  }, [])
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+
+    if (profile && profile.role !== 'admin') {
+      toast.error('Only admins can create groups')
+      return
+    }
 
     if (!name.trim()) {
       toast.error('Group name is required')
@@ -45,6 +74,14 @@ export default function CreateGroupPage() {
     } finally {
       setCreating(false)
     }
+  }
+
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+        <div className="animate-spin h-8 w-8 border-4 border-[#10B981] border-t-transparent rounded-full"></div>
+      </div>
+    )
   }
 
   return (

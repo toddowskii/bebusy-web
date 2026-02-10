@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { sanitizePlainText, containsScriptLike } from '@/lib/security/sanitize'
 
+// DELETE handler: deletes a post if the requester owns it or is admin
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -8,108 +10,165 @@ export async function DELETE(
   try {
     const { id: postId } = await params
 
-    // Get the user's session from the request
     const authHeader = request.headers.get('authorization')
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
+    if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const token = authHeader.replace('Bearer ', '')
-    
-    // Create client with anon key to verify user
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
     const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    if (userError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Use service role to check user's role (bypasses RLS)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
-    // Check user's role
-    const { data: profile, error: profileError } = await supabaseAdmin
+    const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single()
 
-    if (profileError) {
-      console.error('Error fetching profile:', profileError)
-    }
-
-    console.log('User profile:', profile, 'User ID:', user.id)
     const isAdmin = (profile as any)?.role === 'admin'
-    console.log('Is user admin?', isAdmin, 'Profile role:', (profile as any)?.role)
 
-    // Use service role to check post existence if admin, otherwise use regular client
     const clientToCheck = isAdmin
-      ? createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        )
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       : supabase
 
-    // Get the post to check ownership
-    const { data: post, error: postError } = await clientToCheck
+    const { data: post } = await clientToCheck
       .from('posts')
       .select('user_id')
       .eq('id', postId)
       .single()
 
-    if (postError) {
-      console.error('Error fetching post:', postError)
-    }
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+    if (post.user_id !== user.id && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    if (!post) {
-      console.log('Post not found. postId:', postId, 'isAdmin:', isAdmin, 'hasServiceKey:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
-      return NextResponse.json({ error: 'Post not found' }, { status: 404 })
-    }
-
-    // Check if user owns the post or is admin
-    if (post.user_id !== user.id && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    // Use service role if admin, otherwise use regular client
     if (isAdmin) {
-      const supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-
-      const { error } = await supabaseAdmin
-        .from('posts')
-        .delete()
-        .eq('id', postId)
-
-      if (error) {
-        console.error('Error deleting post:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      const supabaseAdmin2 = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+      const { error } = await supabaseAdmin2.from('posts').delete().eq('id', postId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     } else {
-      // Regular user - use normal client (RLS will check ownership)
-      const { error } = await supabase
-        .from('posts')
-        .delete()
-        .eq('id', postId)
-
-      if (error) {
-        console.error('Error deleting post:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      const { error } = await supabase.from('posts').delete().eq('id', postId)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error in delete post API:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// PATCH handler: updates a post's content (sanitizes and runs moderation)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: postId } = await params
+
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const token = authHeader.replace('Bearer ', '')
+
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
+    if (userError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const isAdmin = (profile as any)?.role === 'admin'
+
+    const clientToCheck = isAdmin
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+      : supabase
+
+    const { data: post } = await clientToCheck
+      .from('posts')
+      .select('user_id')
+      .eq('id', postId)
+      .single()
+
+    if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 })
+    if (post.user_id !== user.id && !isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+    const json = await request.json()
+    const { content, image_url } = json
+
+    if (containsScriptLike(content || '')) return NextResponse.json({ error: 'Scripts are not allowed in posts.' }, { status: 400 })
+
+    const sanitized = sanitizePlainText(content || '')
+
+    let finalContent = sanitized
+    if (finalContent) {
+      const { checkProfanity } = await import('@/lib/security/moderation')
+      const result = await checkProfanity(finalContent)
+      if (result.isProfane) finalContent = result.cleaned
+    }
+
+    // Do not allow updates that leave the post with only whitespace/newlines unless an image is provided
+    if (!finalContent.trim() && (typeof image_url === 'undefined' || image_url === null)) {
+      return NextResponse.json({ error: 'Post must include text or an image.' }, { status: 400 })
+    }
+
+    if (isAdmin) {
+      const supabaseAdmin2 = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+      const { data: updated, error: updateError } = await supabaseAdmin2
+        .from('posts')
+        .update({ content: finalContent, image_url: image_url === null ? null : image_url })
+        .eq('id', postId)
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            full_name,
+            avatar_url,
+            role
+          )
+        `)
+        .single()
+
+      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+      return NextResponse.json(updated)
+    } else {
+      const { data: updated, error: updateError } = await supabase
+        .from('posts')
+        .update({ content: finalContent, image_url: image_url === null ? null : image_url })
+        .eq('id', postId)
+        .select(`
+          *,
+          profiles:user_id (
+            id,
+            full_name,
+            avatar_url,
+            role
+          )
+        `)
+        .single()
+
+      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+      return NextResponse.json(updated)
+    }
+  } catch (err) {
+    console.error('Error in PATCH post API:', err)
+    return NextResponse.json({ error: 'Failed to update post' }, { status: 500 })
   }
 }

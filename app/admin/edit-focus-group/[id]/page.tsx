@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { updateFocusGroup, deleteFocusGroup } from '@/lib/supabase/admin'
 import { getFocusGroup } from '@/lib/supabase/focusgroups'
 import { ArrowLeft, Calendar, Users, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function EditFocusGroupPage({ params }: { params: { id: string } }) {
+export default function EditFocusGroupPage() {
   const router = useRouter()
+  const params = useParams() as { id?: string }
   const [loading, setLoading] = useState(true)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -21,11 +22,13 @@ export default function EditFocusGroupPage({ params }: { params: { id: string } 
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
+    if (!params?.id) return
     loadFocusGroup()
-  }, [params.id])
+  }, [params?.id])
 
   const loadFocusGroup = async () => {
     try {
+      if (!params?.id) return
       const group = await getFocusGroup(params.id)
       if (!group) {
         toast.error('Focus group not found')
@@ -58,8 +61,12 @@ export default function EditFocusGroupPage({ params }: { params: { id: string } 
 
     setUpdating(true)
     try {
-      await updateFocusGroup(params.id, {
-        title: title.trim(),
+      if (!params?.id) {
+        toast.error('Missing group id')
+        return
+      }
+
+      await updateFocusGroup(params.id, {        title: title.trim(),
         description: description.trim(),
         mentor_name: mentorName.trim(),
         mentor_role: mentorRole.trim(),
@@ -85,6 +92,7 @@ export default function EditFocusGroupPage({ params }: { params: { id: string } 
 
     setDeleting(true)
     try {
+      if (!params?.id) { toast.error('Missing group id'); return }
       await deleteFocusGroup(params.id)
       toast.success('Focus group deleted successfully!')
       router.push('/admin')

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Heart, MessageCircle, Share2, Trash2, AlertTriangle, Flag } from 'lucide-react'
-import { likePost, unlikePost, deletePost } from '@/lib/supabase/posts'
+import { Heart, MessageCircle, Share2, Trash2, AlertTriangle, Flag, Edit } from 'lucide-react'
+import { likePost, unlikePost, deletePost, updatePost } from '@/lib/supabase/posts'
 import { supabase } from '@/config/supabase'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
@@ -39,6 +39,12 @@ export function PostCard({ post }: PostCardProps) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(post.content || '')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [contentState, setContentState] = useState(post.content || '')
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -153,7 +159,12 @@ export function PostCard({ post }: PostCardProps) {
 
   return (
     <>
-      <Link href={`/post/${post.id}`} className="block" style={{ marginBottom: '16px' }}>
+      {!isEditing ? (
+      <Link
+        href={`/post/${post.id}`}
+        className="block"
+        style={{ marginBottom: '16px' }}
+      >
         <div className="rounded-[20px] transition-all cursor-pointer shadow-sm" style={{ backgroundColor: 'var(--bg-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)', paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}>
         {/* Header */}
         <div className="flex items-start gap-3 mb-3">
@@ -187,18 +198,34 @@ export function PostCard({ post }: PostCardProps) {
           </div>
 
           {(currentUserId === post.user_id || currentUserRole === 'admin') && (
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                setShowDeleteModal(true)
-              }}
-              disabled={isDeleting}
-              className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all hover:text-red-500"
-              style={{ color: 'var(--text-muted)' }}
-              title="Delete post"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setIsEditing(true)
+                  setEditContent(contentState)
+                }}
+                className="p-1.5 hover:bg-accent rounded-lg transition-all"
+                style={{ color: 'var(--text-muted)' }}
+                title="Edit post"
+              >
+                <Edit className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  setShowDeleteModal(true)
+                }}
+                disabled={isDeleting}
+                className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all hover:text-red-500"
+                style={{ color: 'var(--text-muted)' }}
+                title="Delete post"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
           )}
 
           {currentUserId && currentUserId !== post.user_id && (
@@ -218,7 +245,50 @@ export function PostCard({ post }: PostCardProps) {
 
         {/* Content */}
         <div className="mb-3" style={{ marginBottom: '12px' }}>
-          <p className="whitespace-pre-wrap break-words leading-relaxed" style={{ color: 'var(--text-primary)' }}>{post.content}</p>
+          {!isEditing ? (
+            <p className="whitespace-pre-wrap break-words leading-relaxed" style={{ color: 'var(--text-primary)' }}>{contentState}</p>
+          ) : (
+            <div onClick={(e) => { e.stopPropagation() }} onMouseDown={(e) => { e.stopPropagation() }} onPointerDown={(e) => { e.stopPropagation() }} onContextMenu={(e) => { e.stopPropagation() }}>
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="Edit your post"
+                className="w-full rounded-xl border focus:outline-none transition-colors resize-none"
+                style={{ padding: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)', minHeight: '100px' }}
+              />
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsEditing(false); setEditContent(contentState) }}
+                  className="px-4 py-2 rounded-full bg-[#3C3C3E] text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    if (isSavingEdit) return
+                    setIsSavingEdit(true)
+                    try {
+                      const { data, error } = await updatePost(post.id, editContent)
+                      if (error) throw error
+                      setContentState(data.content || editContent)
+                      toast.success('Post updated')
+                      setIsEditing(false)
+                    } catch (err) {
+                      console.error(err)
+                      toast.error('Failed to update post')
+                    } finally {
+                      setIsSavingEdit(false)
+                    }
+                  }}
+                  className="px-4 py-2 rounded-full bg-[#10B981] text-white"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Image */}
@@ -282,6 +352,196 @@ export function PostCard({ post }: PostCardProps) {
         </div>
       </div>
     </Link>
+  ) : (
+    <div className="block" style={{ marginBottom: '16px' }}>
+      <div className="rounded-[20px] transition-all cursor-pointer shadow-sm" style={{ backgroundColor: 'var(--bg-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)', paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}>
+      {/* Header */}
+      <div className="flex items-start gap-3 mb-3">
+        <div className="flex-shrink-0">
+          {post.profiles?.avatar_url ? (
+            <img
+              src={post.profiles.avatar_url}
+              alt={post.profiles.username || 'User'}
+              className="w-12 h-12 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-semibold">
+              {post.profiles?.username?.[0].toUpperCase() || 'U'}
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="font-bold truncate text-base" style={{ color: 'var(--text-primary)' }}>
+              {post.profiles?.full_name || post.profiles?.username || 'Unknown User'}
+            </span>
+            {post.profiles?.role && (
+              <>
+                <span style={{ color: 'var(--text-muted)' }}>·</span>
+                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{post.profiles.role}</span>
+              </>
+            )}
+          </div>
+          <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{formatDate(post.created_at)}</span>
+        </div>
+
+        {(currentUserId === post.user_id || currentUserRole === 'admin') && (
+          <>
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setIsEditing(true)
+                setEditContent(contentState)
+              }}
+              className="p-1.5 hover:bg-accent rounded-lg transition-all"
+              style={{ color: 'var(--text-muted)' }}
+              title="Edit post"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                setShowDeleteModal(true)
+              }}
+              disabled={isDeleting}
+              className="p-1.5 hover:bg-red-500/10 rounded-lg transition-all hover:text-red-500"
+              style={{ color: 'var(--text-muted)' }}
+              title="Delete post"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        {currentUserId && currentUserId !== post.user_id && (
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              setShowReportModal(true)
+            }}
+            className="p-1.5 hover:bg-yellow-500/10 rounded-lg transition-all hover:text-yellow-500"
+            style={{ color: 'var(--text-muted)' }}
+            title="Report post"
+          >
+            <Flag className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="mb-3" style={{ marginBottom: '12px' }}>
+        {!isEditing ? (
+          <p className="whitespace-pre-wrap break-words leading-relaxed" style={{ color: 'var(--text-primary)' }}>{contentState}</p>
+        ) : (
+          <div onClick={(e) => { e.stopPropagation() }} onMouseDown={(e) => { e.stopPropagation() }}>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="Edit your post"
+              className="w-full rounded-xl border focus:outline-none transition-colors resize-none"
+              style={{ padding: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)', minHeight: '100px' }}
+            />
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsEditing(false); setEditContent(contentState) }}
+                className="px-4 py-2 rounded-full bg-[#3C3C3E] text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (isSavingEdit) return
+                  setIsSavingEdit(true)
+                  try {
+                    const { data, error } = await updatePost(post.id, editContent)
+                    if (error) throw error
+                    setContentState(data.content || editContent)
+                    toast.success('Post updated')
+                    setIsEditing(false)
+                  } catch (err) {
+                    console.error(err)
+                    toast.error('Failed to update post')
+                  } finally {
+                    setIsSavingEdit(false)
+                  }
+                }}
+                className="px-4 py-2 rounded-full bg-[#10B981] text-white"
+              >
+                {isSavingEdit ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Image */}
+      {post.image_url && (
+        <div className="mb-3 rounded-xl overflow-hidden" style={{ marginBottom: '12px' }}>
+          <img
+            src={post.image_url}
+            alt="Post image"
+            className="w-full max-w-[500px] h-auto object-contain"
+          />
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-6 border-t" style={{ borderColor: 'var(--border)', paddingTop: '12px', marginTop: '12px' }}>
+        <button
+          onClick={(e) => {
+            e.preventDefault()
+            handleLike()
+          }}
+          disabled={isLiking}
+          className="flex items-center gap-2 hover:text-red-500 transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+        >
+          <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+          <span className="text-sm font-medium">{likeCount}</span>
+        </button>
+
+        <button className="flex items-center gap-2 hover:text-blue-500 transition-colors" style={{ color: 'var(--text-muted)' }}>
+          <MessageCircle className="w-5 h-5" />
+          <span className="text-sm font-medium">{post.comments.length}</span>
+        </button>
+
+        <div className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
+          {/* Share button: uses native Web Share API when available, falls back to copy */}
+          <button
+            onClick={async (e) => {
+              e.preventDefault()
+              const url = typeof window !== 'undefined' ? `${window.location.origin}/post/${post.id}` : `/post/${post.id}`
+              // First try native share synchronously to preserve gesture
+              if (typeof navigator !== 'undefined' && (navigator as any).share) {
+                try {
+                  await (navigator as any).share({ title: `Post by ${post.profiles?.username || 'user'}`, text: post.content.slice(0, 140), url })
+                  toast.success('Opened native share sheet')
+                  return
+                } catch (err: any) {
+                  console.warn('navigator.share failed or cancelled:', err)
+                  if (err && err.name === 'AbortError') return
+                }
+              }
+
+              const { shareUrl } = await import('@/lib/utils/share')
+              const result = await shareUrl({ title: `Post by ${post.profiles?.username || 'user'}`, text: post.content.slice(0, 140), url })
+              console.log('Share result (post card):', result)
+            }}
+            className="flex items-center gap-2 hover:text-green-500 transition-colors"
+          >
+            <Share2 className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
     {/* Delete Confirmation Modal - Outside Link to prevent navigation interference */}
     {showDeleteModal && (

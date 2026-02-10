@@ -96,7 +96,8 @@ export async function createPost(content: string, imageUrl?: string | null, grou
 
   let sanitizedContent = sanitizePlainText(content);
 
-  if (!sanitizedContent && !imageUrl) {
+  // Reject posts that contain only whitespace/newlines (allow if there's an image)
+  if (!sanitizedContent.trim() && !imageUrl) {
     return { data: null, error: new Error('Post must include text or an image.') };
   }
 
@@ -270,5 +271,47 @@ export async function deletePost(postId: string) {
   } catch (error) {
     console.error('Error deleting post:', error)
     return { error: error as Error }
+  }
+}
+
+/**
+ * Update a post's content (and optionally image_url)
+ */
+export async function updatePost(postId: string, content: string, imageUrl?: string | null) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return { data: null, error: new Error('Not authenticated') }
+
+    const body: any = { content }
+    if (typeof imageUrl !== 'undefined') body.image_url = imageUrl
+
+    const response = await fetch(`/api/posts/${postId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+
+    // Guard against empty or non-JSON responses (avoids "Unexpected end of JSON input")
+    let data: any = null
+    try {
+      const text = await response.text()
+      data = text ? JSON.parse(text) : null
+    } catch (err) {
+      console.warn('updatePost: failed to parse JSON response', err)
+      data = null
+    }
+
+    if (!response.ok) {
+      const errMsg = (data && (data.error || (data.message || null))) || `Failed to update post (${response.status})`
+      return { data: null, error: new Error(errMsg) }
+    }
+
+    return { data: data as any, error: null }
+  } catch (error) {
+    console.error('Error updating post:', error)
+    return { data: null, error }
   }
 }

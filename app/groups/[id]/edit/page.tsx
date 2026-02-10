@@ -20,9 +20,29 @@ export default function EditGroupPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   useEffect(() => {
     loadGroup()
+
+    // Re-validate group existence when the page becomes visible again (handles back navigation/BFCache)
+    const onPageShow = (e: PageTransitionEvent) => {
+      // Always re-run loadGroup to ensure the group still exists
+      loadGroup()
+    }
+
+    // Visibility change covers returning to the page from another tab; pageshow covers BFCache restore
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadGroup()
+    }
+
+    window.addEventListener('pageshow', onPageShow as any)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.removeEventListener('pageshow', onPageShow as any)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [groupId])
 
   const loadGroup = async () => {
@@ -78,16 +98,20 @@ export default function EditGroupPage() {
     }
   }
 
+  // Open the integrated confirmation modal
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this group? This action cannot be undone. All members will be removed and any posts in this group will be orphaned.')) {
-      return
-    }
+    setShowDeleteModal(true)
+  }
 
+  // Called when the user confirms deletion in the modal
+  const confirmDelete = async () => {
     setDeleting(true)
     try {
       await deleteGroup(groupId)
       toast.success('Group deleted!')
-      router.push('/groups')
+      setShowDeleteModal(false)
+      // Use replace so the edit page is removed from history and the user cannot navigate back to it
+      router.replace('/groups')
     } catch (error) {
       console.error('Error deleting group:', error)
       toast.error('Failed to delete group')
@@ -174,7 +198,8 @@ export default function EditGroupPage() {
               This action cannot be undone. All members will be removed from the group.
             </p>
             <button
-              onClick={handleDelete}
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
               disabled={deleting}
               className="w-full rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 border border-red-500/40 text-red-400 hover:text-red-300 disabled:opacity-50"
               style={{ paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)' }}
@@ -184,6 +209,71 @@ export default function EditGroupPage() {
             </button>
           </div>
         </form>
+
+        {/* Delete Confirmation Modal - integrated modal to match app style */}
+        {showDeleteModal && (
+          <div
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setShowDeleteModal(false)
+            }}
+          >
+            <div
+              className="rounded-[20px] max-w-md w-full"
+              style={{ backgroundColor: 'var(--bg-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)', padding: '28px' }}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center" style={{ marginBottom: '20px' }}>
+                  <Trash2 className="w-8 h-8 text-red-500" />
+                </div>
+
+                <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  Delete Group?
+                </h3>
+
+                <p className="text-sm" style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+                  Are you sure you want to delete this group? This action cannot be undone. All members will be removed and any posts in this group will be orphaned.
+                </p>
+
+                <div className="flex gap-3 w-full">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setShowDeleteModal(false)
+                    }}
+                    disabled={deleting}
+                    className="flex-1 px-6 py-3 font-semibold rounded-full transition-colors disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => !deleting && (e.currentTarget.style.backgroundColor = 'var(--bg-hover)')}
+                    onMouseLeave={(e) => !deleting && (e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)')}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (!deleting) confirmDelete()
+                    }}
+                    disabled={deleting}
+                    className="flex-1 px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full transition-colors disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting...' : 'Delete Group'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

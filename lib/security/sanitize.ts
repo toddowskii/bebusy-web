@@ -27,10 +27,12 @@ export function sanitizeInput(input: string): string {
 export function sanitizePlainText(input: string): string {
   if (!input) return '';
 
-  // Preserve symbols like < and > for math while stripping control chars
-  const clean = input.replace(/[\u0000-\u001F\u007F]/g, '');
+  // Remove control characters but keep common whitespace characters (tab, LF, CR)
+  // This preserves user line breaks and tabs so text formatting is retained.
+  const clean = input.replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F]/g, '');
 
-  return clean.trim();
+  // Do NOT trim here — preserve leading/trailing whitespace and newlines for user formatting.
+  return clean;
 }
 
 /**

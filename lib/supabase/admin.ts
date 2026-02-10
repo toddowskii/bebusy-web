@@ -70,7 +70,19 @@ export async function createFocusGroup(focusGroup: {
   end_date?: string;
 }) {
   const { data: { user } } = await supabase.auth.getUser();
-  
+  if (!user) throw new Error('Not authenticated');
+
+  // Ensure the current user is an admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if ((profile as any)?.role !== 'admin') {
+    throw new Error('Only admins can create focus groups')
+  }
+
   // First, create the associated group for communication
   const { data: groupData, error: groupError } = await supabaseAdmin
     .from('groups')

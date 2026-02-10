@@ -1,54 +1,82 @@
 // lib/security/moderation.ts
-// Using dynamic import to handle bad-words CommonJS module
-let filter: any;
+
+// Try to create a default filter instance for synchronous helper functions (best-effort)
+let filter: any = {
+  isProfane: () => false,
+  clean: (text: string) => text,
+}
 
 try {
-  const BadWordsFilter = require('bad-words');
-  filter = new BadWordsFilter();
-} catch {
-  // Fallback if require doesn't work
-  filter = {
-    isProfane: () => false,
-    clean: (text: string) => text
-  };
+  // Handle both CommonJS and ESM shapes
+  // require may return the constructor directly or an object with `.default`
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const maybeMod = require('bad-words') as any
+  const BadWordsFilter = ((maybeMod as any)?.default ?? maybeMod) as any
+  if (typeof BadWordsFilter === 'function') {
+    filter = new BadWordsFilter()
+  }
+} catch (err) {
+  // keep fallback filter
 }
 
 /**
- * Check if content contains profanity or inappropriate language
+ * Check if content contains profanity or inappropriate language (sync helper)
  * @param content - The content to check
  * @returns true if content is inappropriate
  */
 export function isProfane(content: string): boolean {
   if (!content) return false;
-  return filter.isProfane(content);
+  try {
+    return filter.isProfane(content);
+  } catch (err) {
+    console.warn('isProfane fallback due to filter error:', err)
+    return false
+  }
 }
 
 /**
- * Clean profanity from content (replace with asterisks)
+ * Clean profanity from content (replace with asterisks) (sync helper)
  * @param content - The content to clean
  * @returns Content with profanity replaced
  */
 export function cleanProfanity(content: string): string {
   if (!content) return '';
-  return filter.clean(content);
+  try {
+    return filter.clean(content);
+  } catch (err) {
+    console.warn('cleanProfanity fallback due to filter error:', err)
+    return content
+  }
 }
 
 /**
- * Validate content before posting
+ * Validate content before posting using a server-side profanity check when available
  * @param content - The content to validate
- * @returns Object with isValid flag and error message if invalid
+ * @returns Object with isProfane flag and cleaned text
  */
-export async function checkProfanity(content: string): Promise<{ isProfane: boolean; cleaned: string }>{
+export async function checkProfanity(content: string): Promise<{ isProfane: boolean; cleaned: string }> {
   if (!content) return { isProfane: false, cleaned: '' }
 
-  // Server-side: use bad-words directly
+  // Server-side: dynamic import to handle ESM/CJS interop cleanly
   if (typeof window === 'undefined') {
     try {
-      const BadWordsFilter = require('bad-words')
-      const filter = new BadWordsFilter()
-      return { isProfane: filter.isProfane(content), cleaned: filter.clean(content) }
+      const mod = await import('bad-words') as any
+      const BadWordsFilter = ((mod as any)?.default ?? mod) as any
+      if (typeof BadWordsFilter === 'function') {
+        const serverFilter = new BadWordsFilter()
+        return { isProfane: serverFilter.isProfane(content), cleaned: serverFilter.clean(content) }
+      }
+      // If the module shape is unexpected, fall back to the sync `filter` if it exists
+      if (filter && typeof filter.isProfane === 'function') {
+        return { isProfane: filter.isProfane(content), cleaned: filter.clean(content) }
+      }
+      return { isProfane: false, cleaned: content }
     } catch (err) {
       console.error('Failed to run profanity check server-side:', err)
+      // graceful fallback
+      if (filter && typeof filter.isProfane === 'function') {
+        return { isProfane: filter.isProfane(content), cleaned: filter.clean(content) }
+      }
       return { isProfane: false, cleaned: content }
     }
   }

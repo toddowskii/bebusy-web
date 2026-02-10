@@ -12,6 +12,17 @@ export async function createGroup(name: string, description: string, isPrivate: 
     throw new Error('User not authenticated');
   }
 
+  // Ensure only admins can create regular groups
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  if ((profile as any)?.role !== 'admin') {
+    throw new Error('Only admins can create groups');
+  }
+
   const { data, error } = await supabase
     .from('groups')
     .insert({

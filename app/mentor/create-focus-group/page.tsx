@@ -7,6 +7,7 @@ import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { TAG_OPTIONS } from '@/lib/tagCategories'
 import TagPicker from '@/components/TagPicker'
 import { ArrowLeft, Calendar, Users } from 'lucide-react'
+import { AppLayout } from '@/components/AppLayout'
 import toast from 'react-hot-toast'
 
 export default function MentorCreateFocusGroupPage() {
@@ -16,20 +17,40 @@ export default function MentorCreateFocusGroupPage() {
   const [mentorName, setMentorName] = useState('')
   const [mentorRole, setMentorRole] = useState('')
 
+  // Prefill mentor name/role from current profile for a smoother UX and default start date to today
+  const [profile, setProfile] = useState<any>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+
   useEffect(() => {
-    const prefill = async () => {
+    const init = async () => {
       try {
-        const profile = await getCurrentProfile()
-        if (profile) {
-          setMentorName(profile.full_name || profile.username || '')
-          setMentorRole(profile.role || '')
+        setLoadingProfile(true)
+        const prof = await getCurrentProfile()
+        setProfile(prof)
+        if (prof) {
+          setMentorName(prof.full_name || prof.username || '')
+          setMentorRole(prof.role || '')
+        }
+
+        // Default start date to today's local date in YYYY-MM-DD format
+        const today = new Date()
+        const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        setStartDate(iso)
+
+        // Only mentors and admins may access this page
+        if (!prof || (prof.role !== 'mentor' && prof.role !== 'admin')) {
+          toast.error('Only mentors and admins can create focus groups')
+          router.push('/')
+          return
         }
       } catch (err) {
         // ignore
+      } finally {
+        setLoadingProfile(false)
       }
     }
 
-    prefill()
+    init()
   }, [])
   const [totalSpots, setTotalSpots] = useState(10)
   const [startDate, setStartDate] = useState('')
@@ -68,8 +89,16 @@ export default function MentorCreateFocusGroupPage() {
     }
   }
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+        <div className="animate-spin h-8 w-8 border-4 border-[#10B981] border-t-transparent rounded-full"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <AppLayout username={profile?.username}>
       <div className="max-w-[800px] mx-auto p-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
@@ -88,30 +117,25 @@ export default function MentorCreateFocusGroupPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-lg border p-6 space-y-6" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+          <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 space-y-6">
             {/* Title */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
-                Title *
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Title *</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="30-Day Startup Challenge"
                 maxLength={100}
-                className="w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 transition-colors"
-                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
                 required
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{title.length}/100</p>
+              <p className="text-xs text-gray-500 mt-1">{title.length}/100</p>
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Description *
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -127,9 +151,7 @@ export default function MentorCreateFocusGroupPage() {
             {/* Mentor Info */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Your Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Your Name *</label>
                 <input
                   type="text"
                   value={mentorName}
@@ -140,9 +162,7 @@ export default function MentorCreateFocusGroupPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Your Role *
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Your Role *</label>
                 <input
                   type="text"
                   value={mentorRole}
@@ -156,9 +176,7 @@ export default function MentorCreateFocusGroupPage() {
 
             {/* Total Spots */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Total Spots *
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Total Spots *</label>
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-gray-500" />
                 <input
@@ -176,9 +194,7 @@ export default function MentorCreateFocusGroupPage() {
             {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Start Date
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Start Date</label>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-gray-500" />
                   <input
@@ -196,9 +212,7 @@ export default function MentorCreateFocusGroupPage() {
                 <TagPicker value={selectedTags} onChange={setSelectedTags} options={TAG_OPTIONS} placeholder="Filter by tags (comma-separated) e.g. react, python, machine_learning" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  End Date
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">End Date</label>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-gray-500" />
                   <input
@@ -232,6 +246,6 @@ export default function MentorCreateFocusGroupPage() {
           </div>
         </form>
       </div>
-    </div>
+    </AppLayout>
   )
 }

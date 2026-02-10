@@ -162,10 +162,8 @@ export default function AboutPage() {
           <h2 className="text-sm font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Legal</h2>
         </div>
         
-        <a
-          href="https://bebusy.com/terms"
-          target="_blank"
-          rel="noopener noreferrer"
+        <Link
+          href="/settings/about/terms"
           className="flex items-center justify-between transition-colors border-b"
           style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px', borderColor: 'var(--border)' }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
@@ -179,12 +177,10 @@ export default function AboutPage() {
               <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Terms of Service</p>
             </div>
           </div>
-        </a>
+        </Link>
 
-        <a
-          href="https://bebusy.com/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
+        <Link
+          href="/settings/about/privacy"
           className="flex items-center justify-between transition-colors border-b"
           style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px', borderColor: 'var(--border)' }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'}
@@ -198,7 +194,7 @@ export default function AboutPage() {
               <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Privacy Policy</p>
             </div>
           </div>
-        </a>
+        </Link>
 
         <div style={{ padding: '20px', textAlign: 'center' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)' }}>

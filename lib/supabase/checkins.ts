@@ -217,6 +217,8 @@ export async function getStreakLeaderboard(limit: number = 10) {
           avatar_url
         )
       `)
+      // Only include users with a positive streak
+      .gt('current_streak', 0)
       .order('current_streak', { ascending: false })
       .limit(limit)
 

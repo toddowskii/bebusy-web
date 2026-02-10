@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createFocusGroup } from '@/lib/supabase/admin'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { ArrowLeft, Calendar, Users } from 'lucide-react'
+import { AppLayout } from '@/components/AppLayout'
 import toast from 'react-hot-toast'
 
 export default function CreateFocusGroupPage() {
@@ -17,6 +18,42 @@ export default function CreateFocusGroupPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [creating, setCreating] = useState(false)
+
+  // Prefill mentor name/role from current profile for convenience and default start date to today
+  const [profile, setProfile] = useState<any>(null)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        setLoadingProfile(true)
+        const prof = await getCurrentProfile()
+        setProfile(prof)
+        if (prof) {
+          setMentorName(prof.full_name || prof.username || '')
+          setMentorRole(prof.role || '')
+        }
+
+        // Default start date to today's local date in YYYY-MM-DD format
+        const today = new Date()
+        const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        setStartDate(iso)
+
+        // Only admins may access this page
+        if (prof && prof.role !== 'admin') {
+          toast.error('Only admins can access this page')
+          router.push('/')
+          return
+        }
+      } catch (err) {
+        // ignore
+      } finally {
+        setLoadingProfile(false)
+      }
+    }
+
+    init()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,8 +85,16 @@ export default function CreateFocusGroupPage() {
     }
   }
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+        <div className="animate-spin h-8 w-8 border-4 border-[#10B981] border-t-transparent rounded-full"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <AppLayout username={profile?.username}>
       <div className="max-w-[800px] mx-auto p-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
@@ -68,30 +113,24 @@ export default function CreateFocusGroupPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="rounded-lg border p-6 space-y-6" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-            {/* Title */}
+          <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 space-y-6">            {/* Title */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
-                Title *
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Title *</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="30-Day Startup Challenge"
                 maxLength={100}
-                className="w-full border rounded-lg px-4 py-3 focus:outline-none focus:border-green-500 transition-colors"
-                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
                 required
               />
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{title.length}/100</p>
+              <p className="text-xs text-gray-500 mt-1">{title.length}/100</p>
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Description *
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -107,9 +146,7 @@ export default function CreateFocusGroupPage() {
             {/* Mentor Info */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mentor Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Mentor Name *</label>
                 <input
                   type="text"
                   value={mentorName}
@@ -120,9 +157,7 @@ export default function CreateFocusGroupPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mentor Role *
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Mentor Role *</label>
                 <input
                   type="text"
                   value={mentorRole}
@@ -206,6 +241,6 @@ export default function CreateFocusGroupPage() {
           </div>
         </form>
       </div>
-    </div>
+    </AppLayout>
   )
 }
