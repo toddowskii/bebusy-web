@@ -65,7 +65,7 @@ export default function AboutPage() {
           </div>
           <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>BeBusy</h2>
           <p className="mb-1" style={{ color: 'var(--text-muted)' }}>Version 0.1.3-beta</p>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Build 2026.02.08</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Build 2026.02.10</p>
         </div>
       </div>
 
