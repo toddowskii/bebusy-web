@@ -28,6 +28,8 @@ export default function PortfolioPage() {
     technologies: ''
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -93,18 +95,26 @@ export default function PortfolioPage() {
     }
   }
 
-  const handleDeleteProject = async (projectId: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return
+  // Open integrated delete confirmation modal (instead of browser confirm)
+  const handleDeleteProject = (projectId: string) => {
+    setProjectToDelete(projectId)
+  }
 
+  const confirmDeleteProject = async () => {
+    if (!projectToDelete) return
+    setIsDeleting(true)
     try {
-      const { error } = await deletePortfolioProject(projectId)
+      const { error } = await deletePortfolioProject(projectToDelete)
       if (error) throw error
 
-      setProjects(projects.filter(p => p.id !== projectId))
+      setProjects(projects.filter(p => p.id !== projectToDelete))
+      setProjectToDelete(null)
       toast.success('Project deleted')
     } catch (error) {
       console.error('Error deleting project:', error)
       toast.error('Failed to delete project')
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -178,14 +188,14 @@ export default function PortfolioPage() {
               <div style={{ padding: '28px' }}>
                 {/* Featured Badge */}
                 {project.is_featured && (
-                  <div className="inline-flex items-center gap-2 rounded-full text-xs font-semibold mb-3 px-3 py-1" style={{ backgroundColor: '#4b2e05', color: '#FDE68A' }}>
+                  <div className="inline-flex items-center gap-2 rounded-full text-xs font-semibold mb-3 px-3 py-1" style={{ backgroundColor: '#4b2e05', color: '#FDE68A',  padding: '4px 12px', marginBottom: '5px' }}>
                     <Star className="w-3 h-3" />
                     Featured
                   </div>
                 )}
-
+                <div style={{paddingBottom:'7px'}}>
                 {/* Project Info */}
-                <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+                <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)'}}>
                   {project.title}
                 </h3>
                 
@@ -194,10 +204,10 @@ export default function PortfolioPage() {
                     {project.description}
                   </p>
                 )}
-
+              </div>
                 {/* Technologies */}
                 {project.technologies && project.technologies.length > 0 && (
-                  <div className="flex flex-wrap gap-3 mb-4">
+                  <div className="flex flex-wrap gap-3 mb-4" style={{ marginBottom: '5px' }}>
                     {project.technologies.map((tech: string, index: number) => (
                       <span
                         key={index}
@@ -211,7 +221,7 @@ export default function PortfolioPage() {
                 )}
 
                 {/* Completed Date */}
-                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)', marginBottom: '15px' }}>
                   Completed {new Date(project.completed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
 
@@ -378,6 +388,42 @@ export default function PortfolioPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setProjectToDelete(null)}>
+          <div className="bg-card rounded-[20px] border max-w-md w-full" style={{ padding: '28px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-3" style={{ marginBottom: '20px' }}>
+                <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-500" />
+                </div>
+                <h3 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Delete Project</h3>
+              </div>
+              <p className="text-sm" style={{ marginBottom: '20px', color: 'var(--text-muted)' }}>
+                Are you sure you want to delete this project? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setProjectToDelete(null)}
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-3 font-semibold rounded-full transition-colors disabled:opacity-50 text-base"
+                  style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteProject}
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-full disabled:opacity-50 transition-all"
+                >
+                  {isDeleting ? 'Deleting...' : 'Delete Project'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

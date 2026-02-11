@@ -322,6 +322,18 @@ export async function getGroupPosts(groupId: string) {
     const { data: session } = await supabase.auth.getSession();
     const userId = session?.session?.user?.id;
 
+    // Only return posts if the current user is a member of the group
+    if (!userId) return [];
+
+    const { data: membership } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!membership) return [];
+
     const { data, error } = await supabase
       .from('posts')
       .select(`

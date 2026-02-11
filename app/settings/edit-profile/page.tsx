@@ -481,7 +481,7 @@ export default function EditProfilePage() {
   }
 
   return (
-    <div className="min-h-screen text-white" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '80px', paddingBottom: '80px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <div className="min-h-screen text-white" style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '20px', paddingBottom: '20px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Header */}
       <div className="flex items-center justify-between" style={{ marginBottom: '24px' }}>
         <div className="flex items-center gap-4">

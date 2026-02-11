@@ -18,54 +18,104 @@ export interface PostWithProfile extends Post {
 }
 
 /**
- * Fetch posts for the feed with user profiles
+ * Fetch posts for the feed with user profiles. Includes group posts for groups the
+ * current user is a member of (members-only groups will not be shown to non-members).
  */
 export async function fetchPosts(limit: number = 20, offset: number = 0) {
   const { data: session } = await supabase.auth.getSession();
   const userId = session?.session?.user?.id;
 
-  const { data, error } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      profiles:user_id (
-        id,
-        username,
-        full_name,
-        avatar_url,
-        role
-      ),
-      likes (
-        id,
-        user_id
-      ),
-      comments (
-        id
-      )
-    `)
-    .is('group_id', null)
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1);
+  const select = `
+    *,
+    profiles:user_id (
+      id,
+      username,
+      full_name,
+      avatar_url,
+      role
+    ),
+    likes (
+      id,
+      user_id
+    ),
+    comments (
+      id
+    ),
+    groups:group_id (
+      id,
+      name
+    )
+  `;
 
-  if (error) {
-    console.error('Error fetching posts:', error);
+  try {
+    // Fetch public posts (not in groups)
+    const { data: publicPosts, error: publicError } = await supabase
+      .from('posts')
+      .select(select)
+      .is('group_id', null)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (publicError) {
+      console.error('Error fetching public posts:', publicError);
+      return { posts: [], error: publicError };
+    }
+
+    let combined: any[] = (publicPosts as any[]) || [];
+
+    // If user is authenticated, also fetch posts from groups they are a member of
+    if (userId) {
+      const { data: memberships } = await supabase
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', userId);
+
+      const groupIds = (memberships || []).map((m: any) => m.group_id).filter(Boolean);
+
+      if (groupIds.length > 0) {
+        const { data: groupPosts, error: groupError } = await supabase
+          .from('posts')
+          .select(select)
+          .in('group_id', groupIds)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (groupError) {
+          console.warn('Error fetching group posts for feed:', groupError);
+        } else {
+          combined = combined.concat((groupPosts as any[]) || []);
+        }
+      }
+    }
+
+    // Deduplicate, sort, and apply pagination
+    const map = new Map<string, any>();
+    (combined || []).forEach((p: any) => {
+      if (p && !map.has(p.id)) map.set(p.id, p);
+    });
+
+    const allPosts = Array.from(map.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const sliced = allPosts.slice(offset, offset + limit);
+
+    // Attach like status
+    if (userId && sliced.length > 0) {
+      const postsWithLikeStatus = sliced.map((post: any) => ({
+        ...post,
+        is_liked: post.likes?.some((like: any) => like.user_id === userId) || false
+      }));
+
+      // Filter out posts without valid profiles
+      const validPosts = postsWithLikeStatus.filter((p: any) => p.profiles) || [];
+
+      return { posts: validPosts as any[], error: null };
+    }
+
+    const validPosts = sliced.filter((p: any) => p.profiles) || [];
+    return { posts: validPosts as any[], error: null };
+  } catch (error) {
+    console.error('Error in fetchPosts:', error);
     return { posts: [], error };
   }
-
-  // Filter out posts without valid profiles
-  const validPosts = (data as any[])?.filter(post => post.profiles) || [];
-
-  // Check if current user has liked each post
-  if (userId && validPosts.length > 0) {
-    const postsWithLikeStatus = validPosts.map(post => ({
-      ...post,
-      is_liked: post.likes?.some((like: any) => like.user_id === userId) || false
-    }));
-
-    return { posts: postsWithLikeStatus as any[], error: null };
-  }
-
-  return { posts: validPosts as any[], error: null };
 }
 
 /**
@@ -109,6 +159,20 @@ export async function createPost(content: string, imageUrl?: string | null, grou
       // Auto-clean profane words and proceed with cleaned content
       console.log('Profanity detected - applying automatic cleanup')
       sanitizedContent = result.cleaned
+    }
+  }
+
+  // If this is a group post, ensure the user is a member of that group
+  if (groupId) {
+    const { data: membership } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', groupId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (!membership) {
+      return { data: null, error: new Error('You must be a member of the group to post.') };
     }
   }
 

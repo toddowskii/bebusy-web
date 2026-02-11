@@ -200,12 +200,12 @@ export default function NotificationsPage() {
                   }
                 }
               }}
-              className={`bg-card rounded-[20px] border hover:bg-card-hover transition-all cursor-pointer ${
+              className={`bg-card rounded-[20px]  hover:bg-card-hover transition-all cursor-pointer ${
                 !notification.is_read ? 'border-primary/40' : 'border-border'
               }`}
-              style={{ paddingLeft: '18px', paddingRight: '18px', paddingTop: '16px', paddingBottom: '16px' }}
+              
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3" style={{ border: '1px solid var(--border)', backgroundColor: 'var(--bg-secondary)', borderRadius: '12px', padding: '16px', marginBottom: '10px', marginTop: '10px' }}>
                 <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                   {getNotificationIcon(notification.type)}
                 </div>

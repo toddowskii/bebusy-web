@@ -33,14 +33,14 @@ export default function TagPicker({
 
   return (
     <div className="w-full">
-      <div className="border rounded-lg px-3 py-2 flex flex-col" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+      <div className="border rounded-lg px-3 py-2 flex flex-col" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', padding: '16px' }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex flex-wrap gap-2 items-center">
             {value.length === 0 ? (
               <div className="text-sm text-[var(--text-muted)]">No tags selected</div>
             ) : (
               value.map(tag => (
-                <div key={tag} className="px-3 py-1 rounded-full bg-primary/20 text-sm flex items-center gap-2">
+                <div key={tag} className="px-3 py-1 rounded-full bg-primary/20 text-sm flex items-center gap-2" style={{padding:'10px'}}>
                   <span>{(options.find(o => o.key === tag)?.label || tag).replace(/_/g, ' ')}</span>
                   <button type="button" onClick={() => toggleTag(tag)} className="opacity-80">✕</button>
                 </div>
@@ -60,6 +60,7 @@ export default function TagPicker({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={placeholder}
                 className="w-full rounded px-2 py-1 bg-transparent outline-none"
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderRadius: '8px', paddingLeft: '12px', paddingRight: '12px', paddingTop: '8px', paddingBottom: '8px', marginBottom: '12px', marginTop: '8px', borderColor: 'var(--border)' }}
               />
             </div>
 
@@ -72,6 +73,7 @@ export default function TagPicker({
                     type="button"
                     onClick={() => toggleTag(opt.key)}
                     className={`px-3 py-1 rounded-full text-sm transition-all ${selected ? 'bg-primary text-black' : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] hover:opacity-90'}`}
+                    style={{padding:'10px'}}
                   >
                     {opt.label}
                   </button>

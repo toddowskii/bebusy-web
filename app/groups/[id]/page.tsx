@@ -5,10 +5,11 @@ import { useParams, useRouter } from 'next/navigation'
 import { getGroup, isMember, joinGroup, leaveGroup, getGroupPosts, getGroupMembers } from '@/lib/supabase/groups'
 import { getCurrentProfile } from '@/lib/supabase/profiles'
 import { PostCard } from '@/components/PostCard'
+import { CreatePost } from '@/components/CreatePost'
 import { ArrowLeft, Users, Settings, X } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
-import { AppLayout } from '@/components/AppLayout'
+import { AppLayout } from '@/components/AppLayout' 
 
 export default function GroupDetailPage() {
   const params = useParams()
@@ -170,10 +171,10 @@ export default function GroupDetailPage() {
 
           {/* Name & Description */}
           <div className="mb-3">
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{group.name}</h1>
-            <div className="flex items-center gap-2 mt-2">
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)', paddingTop: '7px' }}>{group.name}</h1>
+            <div className="flex items-center gap-2 mt-2" style={{paddingTop: '7px', paddingBottom: '7px'}}>
               {(group.tags || []).map((t: string) => (
-                <span key={t} className="px-3 py-1 rounded-full text-sm bg-gray-700">{t.replace(/_/g, ' ')}</span>
+                <span style={{ padding: '4px 8px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)' }} key={t} className="px-3 py-1 rounded-full text-sm">{t.replace(/_/g, ' ')}</span>
               ))}
             </div>
           </div>
@@ -200,20 +201,51 @@ export default function GroupDetailPage() {
 
       {/* Posts Section */}
       <div>
-        {posts.length === 0 ? (
+        {!isMemberOfGroup ? (
           <div className="p-12 text-center">
-            <div className="text-5xl mb-4">📝</div>
-            <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>No posts yet</h3>
-            <p style={{ color: 'var(--text-muted)' }}>
-              {isMemberOfGroup ? "Be the first to post in this group!" : "Join the group to see posts"}
+            <div className="text-5xl mb-4">🔒</div>
+            <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Members-only posts</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
+              {currentUser ? 'Join the group to view and post messages.' : 'Log in and join the group to view posts.'}
             </p>
+            {currentUser && (
+              <button
+                onClick={handleJoinLeave}
+                disabled={isJoining}
+                className="rounded-full font-semibold transition-all"
+                style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '8px', paddingBottom: '8px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+              >
+                {isJoining ? '...' : 'Join to view posts'}
+              </button>
+            )}
           </div>
         ) : (
-          <div>
-            {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
-          </div>
+          <>
+            {currentUser && isMemberOfGroup && (
+              <CreatePost
+                userAvatar={currentUser?.avatar_url}
+                username={currentUser?.username}
+                groupId={groupId}
+                onPostCreated={async () => { const postsData = await getGroupPosts(groupId); setPosts(postsData) }}
+              />
+            )}
+
+            {posts.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="text-5xl mb-4">📝</div>
+                <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>No posts yet</h3>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Be the first to post in this group!
+                </p>
+              </div>
+            ) : (
+              <div>
+                {posts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 

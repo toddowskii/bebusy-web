@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Heart, MessageCircle, Share2, Trash2, AlertTriangle, Flag, Edit } from 'lucide-react'
 import { likePost, unlikePost, deletePost, updatePost } from '@/lib/supabase/posts'
 import { supabase } from '@/config/supabase'
@@ -24,10 +25,12 @@ interface PostCardProps {
     likes: Array<{ id: string }>
     comments: Array<{ id: string }>
     is_liked?: boolean
+    groups?: { id: string; name: string } | null
   }
 }
 
 export function PostCard({ post }: PostCardProps) {
+  const router = useRouter()
   const [isLiked, setIsLiked] = useState(post.is_liked || false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
@@ -167,7 +170,7 @@ export function PostCard({ post }: PostCardProps) {
       >
         <div className="rounded-[20px] transition-all cursor-pointer shadow-sm" style={{ backgroundColor: 'var(--bg-secondary)', borderWidth: '1px', borderStyle: 'solid', borderColor: 'var(--border)', paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-hover)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}>
         {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
+        <div className="flex items-start gap-3 mb-3" style={{paddingBottom: '7px'}}>
           <div className="flex-shrink-0">
             {post.profiles?.avatar_url ? (
               <img
@@ -194,7 +197,21 @@ export function PostCard({ post }: PostCardProps) {
                 </>
               )}
             </div>
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{formatDate(post.created_at)}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{formatDate(post.created_at)}</span>
+              {post.groups?.id && (
+                <>
+                  <span style={{ color: 'var(--text-muted)' }}>·</span>
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/groups/${post.groups?.id}`) }}
+                    className="text-sm px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', padding: '4px 8px' }}
+                  >
+                    {post.groups?.name}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {(currentUserId === post.user_id || currentUserRole === 'admin') && (

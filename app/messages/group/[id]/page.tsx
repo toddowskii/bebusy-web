@@ -305,7 +305,7 @@ export default function GroupChatPage() {
                       )}
                       <p className="whitespace-pre-wrap break-words">{message.content}</p>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-2 mt-1 md:opacity-0 md:group-hover:opacity-100 opacity-100 transition-opacity">
                       <button
                         onClick={() => setReplyingTo(message)}
                         className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"

@@ -332,20 +332,20 @@ export default function ProfilePage() {
       </div>
 
       {/* Profile Card with integrated banner */}
-      <div className="bg-card rounded-[20px] border border-border overflow-hidden" style={{ marginBottom: '24px' }}>
+      <div className="bg-card rounded-[20px] border border-border overflow-hidden" style={{ marginBottom: '24px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
         {/* Cover Image */}
         {profile.cover_url ? (
-          <div className="h-40 relative">
+          <div className="h-28 sm:h-36 md:h-40 lg:h-48 relative">
             <img src={profile.cover_url} alt="Cover" className="w-full h-full object-cover" />
           </div>
         ) : (
-          <div className="h-20 bg-gradient-to-r from-green-500/20 to-emerald-600/20 relative"></div>
+          <div className="h-28 sm:h-36 md:h-40 lg:h-48 bg-gradient-to-r from-green-500/20 to-emerald-600/20 relative"></div>
         )}
         
         {/* Profile Info */}
         <div style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '12px', paddingBottom: '16px' }}>
           {/* Avatar & Action */}
-          <div className={`flex justify-between items-start ${profile.cover_url ? '-mt-12' : '-mt-10'} mb-4`}>
+          <div className={`flex justify-between items-start ${profile.cover_url ? '-mt-10 sm:-mt-12' : '-mt-10'} mb-4`}>
           {profile.avatar_url ? (
             <img
               src={profile.avatar_url}
@@ -363,7 +363,7 @@ export default function ProfilePage() {
             <Link
               href="/settings/edit-profile"
               className="mt-3 bg-muted hover:bg-accent rounded-full font-semibold transition-colors text-foreground flex items-center gap-2"
-              style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '8px', paddingBottom: '8px' }}
+              style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '8px', paddingBottom: '8px', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid white' }}
             >
               <Settings className="w-4 h-4" />
               Edit Profile
@@ -437,19 +437,19 @@ export default function ProfilePage() {
 
         {/* Tags */}
         {profile.tags && profile.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-3" style={{paddingTop: '5px', paddingBottom: '10px'}}>
             {profile.tags.map((tag: string) => {
               const cat = categorizeTag(tag)
               const cls = badgeClassForCategory(cat)
               return (
-                <span key={tag} className={`text-xs rounded-full px-3 py-1 ${cls}`}>{tag.replace(/_/g, ' ')}</span>
+                <span style = {{paddingLeft: '10px', paddingRight: '10px', paddingTop: '4px', paddingBottom: '4px'  }} key={tag} className={`text-xs rounded-full px-3 py-1 ${cls}`}>{tag.replace(/_/g, ' ')}</span>
               )
             })}
           </div>
         )}
 
         {/* Meta Info */}
-        <div className="flex flex-wrap gap-4 text-muted-foreground text-sm mb-3">
+        <div className="flex flex-wrap gap-4 text-muted-foreground text-sm mb-3" style={{paddingBottom: '5px'}}>
           <div className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
             <span>Joined {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
@@ -469,7 +469,6 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
-
         {/* Follow Stats */}
         <div className="flex flex-wrap gap-4 text-sm items-center">
           <button className="hover:underline" onClick={() => setActiveTab('following')}>
@@ -493,10 +492,10 @@ export default function ProfilePage() {
 
 
       {/* Tabs */}
-      <div className="flex gap-2" style={{ marginBottom: '24px' }}>
+      <div className="flex gap-2 overflow-x-auto snap-x snap-mandatory -mx-2 px-2" style={{ marginBottom: '24px' }}>
         <button
           onClick={() => setActiveTab('posts')}
-          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-shrink-0 min-w-max sm:flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'posts'
               ? 'bg-[#10B981]/10 text-[#10B981]'
               : 'text-muted-foreground bg-card hover:bg-muted'
@@ -508,7 +507,7 @@ export default function ProfilePage() {
         </button>
         <button
           onClick={() => setActiveTab('media')}
-          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-shrink-0 min-w-max sm:flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'media'
               ? 'bg-[#10B981]/10 text-[#10B981]'
               : 'text-muted-foreground bg-card hover:bg-muted'
@@ -520,7 +519,7 @@ export default function ProfilePage() {
         </button>
         <button
           onClick={() => setActiveTab('likes')}
-          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-shrink-0 min-w-max sm:flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'likes'
               ? 'bg-[#10B981]/10 text-[#10B981]'
               : 'text-muted-foreground bg-card hover:bg-muted'
@@ -532,7 +531,7 @@ export default function ProfilePage() {
         </button>
         <button
           onClick={() => setActiveTab('portfolio')}
-          className={`flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
+          className={`flex-shrink-0 min-w-max sm:flex-1 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 ${
             activeTab === 'portfolio'
               ? 'bg-[#10B981]/10 text-[#10B981]'
               : 'text-muted-foreground bg-card hover:bg-muted'
@@ -627,7 +626,7 @@ export default function ProfilePage() {
                   <div
                     key={project.id}
                     className="rounded-[20px] border overflow-hidden transition-all hover:shadow-lg"
-                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', padding: '0' }}
+                    style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', paddingBottom: '0' }}
                   >
                     <div style={{ padding: '28px' }}>
                       {/* Featured Badge */}
@@ -635,7 +634,7 @@ export default function ProfilePage() {
                         <Star className="w-3 h-3 fill-current" />
                         Featured
                       </div>
-
+                    <div style={{paddingBottom: '5px', paddingTop: '5px'}}>
                       {/* Project Info */}
                       <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
                         {project.title}
@@ -646,10 +645,10 @@ export default function ProfilePage() {
                           {project.description}
                         </p>
                       )}
-
+                    </div>
                       {/* Technologies */}
                       {project.technologies && project.technologies.length > 0 && (
-                        <div className="flex flex-wrap gap-3 mb-4">
+                        <div className="flex flex-wrap gap-3 mb-4" style={{ marginBottom: '5px' }}>
                           {project.technologies.map((tech: string, index: number) => (
                             <span
                               key={index}
@@ -663,7 +662,7 @@ export default function ProfilePage() {
                       )}
 
                       {/* Completed Date */}
-                      <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-xs mb-4" style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>
                         Completed {new Date(project.completed_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                       </p>
 
@@ -686,7 +685,7 @@ export default function ProfilePage() {
               </div>
 
               {/* View All Link */}
-              <div className="mt-6 text-center">
+              <div className="mt-6 text-center" style={{paddingTop: '12px'}}>
                 <Link
                   href={`/portfolio/${username}`}
                   className="inline-flex items-center gap-2 text-[#10B981] hover:text-[#059669] font-semibold transition-colors"
@@ -704,10 +703,11 @@ export default function ProfilePage() {
       {activeTab === 'followers' && (
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          style = {{ backdropFilter: 'blur(4px)' }}
           onClick={() => setActiveTab('posts')}
         >
           <div
-            className="bg-card rounded-[20px] border border-border w-full max-w-[320px] sm:max-w-md max-h-[85vh] flex flex-col"
+           className="rounded-[20px] border border-border w-full max-w-[320px] sm:max-w-md max-h-[85vh] flex flex-col bg-black/80 backdrop-blur-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border" style={{ padding: '20px 24px' }}>
@@ -779,7 +779,7 @@ export default function ProfilePage() {
           onClick={() => setActiveTab('posts')}
         >
           <div
-            className="bg-card rounded-[20px] border border-border w-full max-w-[320px] sm:max-w-md max-h-[85vh] flex flex-col"
+            className="rounded-[20px] border border-border w-full max-w-[320px] sm:max-w-md max-h-[85vh] flex flex-col bg-black/80 backdrop-blur-sm"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-border" style={{ padding: '20px 24px' }}>

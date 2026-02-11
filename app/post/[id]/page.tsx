@@ -323,11 +323,11 @@ export default function PostDetailPage() {
         </div>
       </header>
 
-      <main style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '80px', paddingBottom: '80px' }}>
+      <main style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '80px', paddingBottom: '80px'}}>
         {/* Post Card */}
-        <div className="bg-card rounded-[20px] border border-border shadow-sm" style={{ marginBottom: '20px', paddingLeft: '24px', paddingRight: '24px', paddingTop: '28px', paddingBottom: '28px' }}>
+        <div className="bg-card rounded-[20px] border border-border shadow-sm" style={{backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)', marginBottom: '20px', paddingLeft: '24px', paddingRight: '24px', paddingTop: '28px', paddingBottom: '28px' }}>
           {/* Header */}
-          <div className="flex items-start gap-3 mb-5">
+          <div className="flex items-start gap-3 mb-5" style={{paddingBottom: '5px'}}>
             <Link href={`/profile/${post.profiles.username}`}>
               {post.profiles.avatar_url ? (
                 <img
@@ -352,15 +352,14 @@ export default function PostDetailPage() {
               </Link>
             </div>
           </div>
-
           {/* Content */}
-          <div className="mb-6">
+          <div className="mb-6" style={{paddingBottom: '10px'}}>
             <p className="text-foreground text-base whitespace-pre-wrap break-words leading-relaxed">{post.content}</p>
           </div>
 
           {/* Image */}
           {post.image_url && (
-            <div className="mb-6 rounded-xl overflow-hidden">
+            <div className="mb-6 rounded-xl overflow-hidden" style={{paddingBottom: '10px',}}>
               <img src={post.image_url} alt="Post image" className="w-full max-w-[500px] h-auto object-contain" />
             </div>
           )}
@@ -572,7 +571,7 @@ export default function PostDetailPage() {
                         <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed text-[15px] mb-3">{comment.content}</p>
                         
                         {/* Action Buttons */}
-                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 opacity-100 transition-opacity">
                           <button
                             onClick={() => handleToggleCommentLike(comment)}
                             disabled={likingCommentId === comment.id}

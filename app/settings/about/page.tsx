@@ -64,8 +64,8 @@ export default function AboutPage() {
             <Zap className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>BeBusy</h2>
-          <p className="mb-1" style={{ color: 'var(--text-muted)' }}>Version 0.1.3-beta</p>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Build 2026.02.08</p>
+          <p className="mb-1" style={{ color: 'var(--text-muted)' }}>Version 0.2.0-beta</p>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Build 2026.02.11</p>
         </div>
       </div>
 

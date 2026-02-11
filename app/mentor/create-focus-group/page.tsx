@@ -58,8 +58,8 @@ export default function MentorCreateFocusGroupPage() {
   const [creating, setCreating] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
 
     if (!title.trim() || !description.trim() || !mentorName.trim() || !mentorRole.trim()) {
       toast.error('Please fill in all required fields')
@@ -99,76 +99,99 @@ export default function MentorCreateFocusGroupPage() {
 
   return (
     <AppLayout username={profile?.username}>
-      <div className="max-w-[800px] mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <button
-            onClick={() => router.back()}
-            className="p-2 rounded-lg transition-colors"
-            style={{ backgroundColor: 'var(--bg-secondary)' }}
-          >
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold">Create Focus Group</h1>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Set up a new mentorship program</p>
+      <div style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', paddingLeft: '20px', paddingRight: '20px'}}>
+        <div className="w-full max-w-none">
+          {/* Header */}
+          <div className="flex items-center justify-between" style={{ marginBottom: '24px' }}>
+            <div className="flex items-center gap-4">
+              <button onClick={() => router.back()} className="p-2 rounded-full transition-colors" onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                <ArrowLeft className="w-5 h-5" style={{ color: 'var(--text-primary)' }} />
+              </button>
+              <div>
+                <h2 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Create Focus Group</h2>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Set up a new mentorship program</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="px-4 py-2 font-semibold rounded-full"
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', paddingLeft: '24px', paddingRight: '24px', paddingTop: '10px', paddingBottom: '10px' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleSubmit()}
+                disabled={creating}
+                className="bg-[#10B981] hover:bg-[#059669] text-white font-semibold rounded-full disabled:opacity-50 transition-all"
+                style={{ paddingLeft: '24px', paddingRight: '24px', paddingTop: '10px', paddingBottom: '10px' }}
+              >
+                {creating ? 'Creating...' : 'Create'}
+              </button>
+            </div>
           </div>
-        </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-gray-900 rounded-lg border border-gray-800 p-6 space-y-6">
+          <div className="rounded-[20px] border" style={{ padding: '24px', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
+            <h3 className="text-lg font-semibold" style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Focus Group Details</h3>
             {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Title *</label>
+            <div style={{ marginBottom: '20px' }}>
+              <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Title *</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="30-Day Startup Challenge"
                 maxLength={100}
-                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
+                className="w-full rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">{title.length}/100</p>
+              <p className="text-xs" style={{ marginTop: '4px', color: 'var(--text-muted)' }}>{title.length}/100</p>
             </div>
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
+              <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Description *</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Learn how to validate your startup idea and build an MVP in 30 days..."
                 maxLength={500}
                 rows={4}
-                className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors resize-none"
+                className="w-full rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors resize-none"
+                style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                 required
               />
-              <p className="text-xs text-gray-500 mt-1">{description.length}/500</p>
+              <p className="text-xs" style={{ marginTop: '4px', color: 'var(--text-muted)' }}>{description.length}/500</p>
             </div>
 
             {/* Mentor Info */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Your Name *</label>
+                <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Mentor Name *</label>
                 <input
                   type="text"
                   value={mentorName}
                   onChange={(e) => setMentorName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
+                  className="w-full rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                  style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Your Role *</label>
+                <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Mentor Role *</label>
                 <input
                   type="text"
                   value={mentorRole}
                   onChange={(e) => setMentorRole(e.target.value)}
                   placeholder="Founder & CEO"
-                  className="w-full bg-black border border-gray-800 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition-colors"
+                  className="w-full rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                  style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                   required
                 />
               </div>
@@ -176,16 +199,17 @@ export default function MentorCreateFocusGroupPage() {
 
             {/* Total Spots */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Total Spots *</label>
+              <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Total Spots *</label>
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-gray-500" />
+                <Users className="w-5 h-5 text-muted-foreground" />
                 <input
                   type="number"
                   value={totalSpots}
                   onChange={(e) => setTotalSpots(parseInt(e.target.value) || 0)}
                   min={1}
                   max={100}
-                  className="flex-1 bg-black border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors"
+                  className="flex-1 rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                  style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                   required
                 />
               </div>
@@ -194,58 +218,40 @@ export default function MentorCreateFocusGroupPage() {
             {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Start Date</label>
+                <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>Start Date</label>
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-gray-500" />
+                  <Calendar className="w-5 h-5 text-muted-foreground" />
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="flex-1 bg-black border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors"
+                    className="flex-1 rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                    style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                   />
                 </div>
               </div>
-
-              {/* Tags */}
-              <div className="rounded-lg border p-6 space-y-4" style={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border)' }}>
-                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Tags</label>
-                <TagPicker value={selectedTags} onChange={setSelectedTags} options={TAG_OPTIONS} placeholder="Filter by tags (comma-separated) e.g. react, python, machine_learning" />
-              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">End Date</label>
+                <label className="block text-sm font-medium" style={{ marginBottom: '8px', color: 'var(--text-muted)' }}>End Date</label>
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-gray-500" />
+                  <Calendar className="w-5 h-5 text-muted-foreground" />
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     min={startDate}
-                    className="flex-1 bg-black border border-gray-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors"
+                    className="flex-1 rounded-xl border focus:border-[#10B981] focus:outline-none transition-colors"
+                    style={{ paddingLeft: '16px', paddingRight: '16px', paddingTop: '12px', paddingBottom: '12px', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', borderColor: 'var(--border)' }}
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="flex-1 px-6 py-3 border border-gray-700 rounded-lg hover:bg-gray-900 transition-colors font-semibold"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={creating}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 transition-all font-semibold shadow-lg shadow-green-500/20"
-            >
-              {creating ? 'Creating...' : 'Create Focus Group'}
-            </button>
-          </div>
+
         </form>
-      </div>
+        </div>
+       </div>
     </AppLayout>
   )
 }
+    

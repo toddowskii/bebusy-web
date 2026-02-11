@@ -11,10 +11,11 @@ import toast from 'react-hot-toast'
 interface CreatePostProps {
   userAvatar?: string
   username: string
+  groupId?: string
   onPostCreated?: () => void
 }
 
-export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostProps) {
+export function CreatePost({ userAvatar, username, groupId, onPostCreated }: CreatePostProps) {
   const [content, setContent] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -144,7 +145,7 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
         imageUrl = publicUrl
       }
 
-      const res = await createPost(content.trim(), imageUrl)
+      const res = await createPost(content.trim(), imageUrl, groupId)
 
       if (res.error) throw res.error
 
@@ -237,7 +238,7 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
         {/* Main Content */}
         <div style={{ paddingLeft: '20px', paddingRight: '20px', paddingTop: '16px', paddingBottom: '16px' }}>
           {/* Header */}
-          <div className="flex items-start gap-3 mb-3">
+          <div className="flex items-start gap-3 mb-3" style={{paddingBottom:'10px'}}>
             {userAvatar ? (
               <img
                 src={userAvatar}
@@ -253,7 +254,7 @@ export function CreatePost({ userAvatar, username, onPostCreated }: CreatePostPr
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{username}</span>
               </div>
-              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Create a post</span>
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{groupId ? 'Create a post in this group' : 'Create a post'}</span>
             </div>
           </div>
 
