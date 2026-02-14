@@ -155,10 +155,12 @@ export default function GroupChatPage() {
       const groupMessages = await getGroupMessages(groupId)
       setMessages(groupMessages)
 
-      // Mark messages as read (don't block on errors)
-      markGroupMessagesAsRead(groupId).catch(err => {
-        console.error('Error marking messages as read:', err)
-      })
+      // Mark messages as read (don't block on errors) — check result for better logging
+      markGroupMessagesAsRead(groupId)
+        .then((res) => {
+          if (!res?.success) console.error('Failed to mark group messages as read:', res?.error)
+        })
+        .catch((err) => console.error('markGroupMessagesAsRead threw:', err))
     } catch (error) {
       console.error('Error loading group chat:', error)
       toast.error('Failed to load group chat')

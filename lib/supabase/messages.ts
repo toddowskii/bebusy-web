@@ -159,33 +159,48 @@ export async function getUnreadMessageCount() {
 
 /**
  * Mark all messages in a conversation as read
+ *
+ * Optional `clientUserId` can be passed from the client to avoid relying on
+ * `supabase.auth.getSession()` (safer during client-side flows).
  */
-export async function markMessagesAsRead(conversationId: string) {
+export async function markMessagesAsRead(conversationId: string, clientUserId?: string) {
   try {
     const { data: session } = await supabase.auth.getSession();
-    const userId = session?.session?.user?.id;
+    // prefer client-supplied id when available (avoids session timing issues)
+    const userId = clientUserId ?? session?.session?.user?.id;
 
     if (!userId) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: 'User not authenticated', count: 0 };
     }
 
-    const { error } = await supabase
+    // Return the updated rows so caller can optimistically update UI and know how many items changed.
+    const { data, error } = await (supabase as any)
       .from('messages')
-      // @ts-expect-error - Supabase type issue
       .update({ is_read: true })
       .eq('conversation_id', conversationId)
       .eq('is_read', false)
-      .neq('sender_id', userId);
+      .neq('sender_id', userId)
+      .select('id');
 
     if (error) {
-      console.error('Error marking messages as read:', error);
-      return { success: false, error: error.message };
+      // log structured info to make debugging easier (avoid printing opaque objects)
+      console.error('markMessagesAsRead failed', {
+        message: (error as any)?.message ?? String(error),
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        code: (error as any)?.code,
+        conversationId,
+        userId,
+      });
+
+      return { success: false, error: (error as any)?.message ?? String(error), count: 0 };
     }
 
-    return { success: true, error: null };
-  } catch (error) {
-    console.error('Error in markMessagesAsRead:', error);
-    return { success: false, error: (error as Error).message };
+    const count = Array.isArray(data) ? data.length : 0;
+    return { success: true, error: null, count };
+  } catch (err) {
+    console.error('Exception in markMessagesAsRead:', err);
+    return { success: false, error: (err as Error).message ?? String(err), count: 0 };
   }
 }
 
@@ -198,26 +213,35 @@ export async function markGroupMessagesAsRead(groupId: string) {
     const userId = session?.session?.user?.id;
 
     if (!userId) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: 'User not authenticated', count: 0 };
     }
 
-    const { error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('messages')
-      // @ts-expect-error - Supabase type issue
       .update({ is_read: true })
       .eq('group_id', groupId)
       .eq('is_read', false)
-      .neq('sender_id', userId);
+      .neq('sender_id', userId)
+      .select('id');
 
     if (error) {
-      console.error('Error marking group messages as read:', error);
-      return { success: false, error: error.message };
+      console.error('markGroupMessagesAsRead failed', {
+        message: (error as any)?.message ?? String(error),
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        code: (error as any)?.code,
+        groupId,
+        userId,
+      });
+
+      return { success: false, error: (error as any)?.message ?? String(error), count: 0 };
     }
 
-    return { success: true, error: null };
-  } catch (error) {
-    console.error('Error in markGroupMessagesAsRead:', error);
-    return { success: false, error: (error as Error).message };
+    const count = Array.isArray(data) ? data.length : 0;
+    return { success: true, error: null, count };
+  } catch (err) {
+    console.error('Exception in markGroupMessagesAsRead:', err);
+    return { success: false, error: (err as Error).message ?? String(err), count: 0 };
   }
 }
 
@@ -289,7 +313,7 @@ export async function getConversations() {
       })
     );
 
-    return conversationsWithData.filter(c => c.otherUser);
+    return conversationsWithData.filter((c: any) => c.otherUser);
   } catch (error) {
     console.error('Error in getConversations:', error);
     return [];

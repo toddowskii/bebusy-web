@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getConversations, getUserGroupChats } from '@/lib/supabase/messages'
@@ -17,6 +17,7 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'all' | 'direct' | 'groups'>('all')
+  const processedMessageIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     loadData()
@@ -38,9 +39,36 @@ export default function MessagesPage() {
         async (payload) => {
           // Only update the specific conversation affected
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const message = payload.new as any
+            let message = payload.new as any
+            if (!message?.id) return
+
+            // If payload is missing sender_id (some realtime payloads are partial),
+            // fetch the row so decisions (increment/decrement) are based on real data.
+            if (typeof message.sender_id === 'undefined') {
+              try {
+                const { data: fetched } = await supabase
+                  .from('messages')
+                  .select('id,conversation_id,group_id,sender_id,is_read,created_at,content')
+                  .eq('id', message.id)
+                  .single()
+                if (fetched) message = fetched
+              } catch (err) {
+                // if fetch fails, skip processing this event to avoid wrong counts
+                console.debug('messages-updates: skipping incomplete payload for id=', message.id, err)
+                return
+              }
+            }
+
+            // dedupe across handlers
+            if (processedMessageIdsRef.current.has(message.id)) return
+            processedMessageIdsRef.current.add(message.id)
+            setTimeout(() => processedMessageIdsRef.current.delete(message.id), 5000)
+
             const conversationId = message.conversation_id
             const groupId = message.group_id
+
+            // Debug: log event so we can trace duplicate increments
+            console.debug('messages-updates event:', payload.eventType, 'id=', message.id, 'sender=', message.sender_id, 'profile=', profile?.id)
 
             // Update conversations state for 1-on-1 chats
             if (conversationId) {
@@ -52,20 +80,20 @@ export default function MessagesPage() {
 
                 const updated = [...prev]
                 const conv = updated[index]
-                
+
                 if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
                   conv.unreadCount = (conv.unreadCount || 0) + 1
                 } else if (payload.eventType === 'UPDATE' && message.is_read) {
                   conv.unreadCount = Math.max((conv.unreadCount || 0) - 1, 0)
                 }
-                
+
                 conv.lastMessage = message
                 conv.updated_at = message.created_at
-                
+
                 updated.sort((a, b) => 
                   new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                 )
-                
+
                 return updated
               })
             }
@@ -80,20 +108,20 @@ export default function MessagesPage() {
 
                 const updated = [...prev]
                 const group = updated[index]
-                
+
                 if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
                   group.unreadCount = (group.unreadCount || 0) + 1
                 } else if (payload.eventType === 'UPDATE' && message.is_read) {
                   group.unreadCount = Math.max((group.unreadCount || 0) - 1, 0)
                 }
-                
+
                 group.lastMessage = message
                 group.updated_at = message.created_at
-                
+
                 updated.sort((a, b) => 
                   new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
                 )
-                
+
                 return updated
               })
             }
@@ -102,8 +130,74 @@ export default function MessagesPage() {
       )
       .subscribe()
 
+    // Listen for immediate client-side "conversation read" events (optimistic UI updates)
+    const onMessagesRead = (e: any) => {
+      const conversationId = e?.detail?.conversationId
+      const unreadCount = e?.detail?.unreadCount || 0
+      if (!conversationId) return
+      setConversations(prev => prev.map(c => c.id === conversationId ? { ...c, unreadCount: Math.max((c.unreadCount || 0) - unreadCount, 0) } : c))
+    }
+    window.addEventListener('bb:messages-read', onMessagesRead)
+
+    // Listen for global message events emitted by AppLayout so the conversations
+    // list updates instantly even when supabase channel isn't used directly.
+    const onAppMessageInserted = (e: any) => {
+      const payload = e?.detail
+      if (!payload || !payload.new) return
+      const message = payload.new as any
+      if (!message?.id) return
+      if (processedMessageIdsRef.current.has(message.id)) return
+      processedMessageIdsRef.current.add(message.id)
+      setTimeout(() => processedMessageIdsRef.current.delete(message.id), 5000)
+
+      // Reuse the same update logic but keep it idempotent (skip if lastMessage.id matches)
+      if (message.conversation_id) {
+        setConversations(prev => {
+          const index = prev.findIndex(c => c.id === message.conversation_id)
+          if (index === -1) return prev
+          const updated = [...prev]
+          const conv = updated[index]
+          if (conv.lastMessage?.id === message.id) return prev
+
+          if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
+            conv.unreadCount = (conv.unreadCount || 0) + 1
+          } else if (payload.eventType === 'UPDATE' && message.is_read) {
+            conv.unreadCount = Math.max((conv.unreadCount || 0) - 1, 0)
+          }
+          conv.lastMessage = message
+          conv.updated_at = message.created_at
+          updated.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+          return updated
+        })
+      }
+
+      if (message.group_id) {
+        setGroupChats(prev => {
+          const index = prev.findIndex(g => g.id === message.group_id)
+          if (index === -1) return prev
+          const updated = [...prev]
+          const group = updated[index]
+          if (group.lastMessage?.id === message.id) return prev
+
+          if (payload.eventType === 'INSERT' && message.sender_id !== profile.id) {
+            group.unreadCount = (group.unreadCount || 0) + 1
+          } else if (payload.eventType === 'UPDATE' && message.is_read) {
+            group.unreadCount = Math.max((group.unreadCount || 0) - 1, 0)
+          }
+          group.lastMessage = message
+          group.updated_at = message.created_at
+          updated.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+          return updated
+        })
+      }
+    }
+
+    window.addEventListener('bb:message-inserted', onAppMessageInserted)
+
     return () => {
       supabase.removeChannel(channel)
+      window.removeEventListener('bb:messages-read', onMessagesRead)
+      window.removeEventListener('bb:message-inserted', onAppMessageInserted)
     }
   }, [profile])
 

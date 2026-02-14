@@ -30,16 +30,42 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const lastMarkedReadAt = useRef<number>(0)
+  const incomingMessageIdsRef = useRef<Set<string>>(new Set())
 
+  // Load conversation once when conversationId changes
   useEffect(() => {
     loadChat()
+  }, [conversationId])
 
-    // Mark messages as read when opening the conversation (don't block on errors)
-    markMessagesAsRead(conversationId).catch(err => {
-      console.error('Error marking messages as read:', err)
-    })
+  // Subscribe to realtime updates and handle visibility/focus — guarded and debounced
+  useEffect(() => {
+    if (!currentUser) return
 
-    // Subscribe to new messages
+    const onVisibility = () => {
+      const now = Date.now()
+      // debounce repeated focus/visibility events (ignore if within 3s)
+      if (document.visibilityState === 'visible' && currentUser && now - lastMarkedReadAt.current > 3000) {
+        lastMarkedReadAt.current = now
+
+        // optimistic local update
+        setMessages(prev => prev.map((m: any) => (m.sender_id !== currentUser.id ? { ...m, is_read: true } : m)))
+
+        // server update + app-wide notification
+        markMessagesAsRead(conversationId)
+          .then(res => {
+            if (res?.success && res.count) {
+              window.dispatchEvent(new CustomEvent('bb:messages-read', { detail: { conversationId, unreadCount: res.count } }))
+            }
+          })
+          .catch(err => console.error('markMessagesAsRead threw on visibility:', err))
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisibility)
+
+    // Subscribe to new messages for this conversation
     const channel = supabase
       .channel(`conversation:${conversationId}`)
       .on(
@@ -51,6 +77,13 @@ export default function ChatPage() {
           filter: `conversation_id=eq.${conversationId}`
         },
         async (payload) => {
+          // Ignore duplicate/rapid events for the same message id
+          const incomingId = (payload.new as any)?.id
+          if (!incomingId) return
+          if (incomingMessageIdsRef.current.has(incomingId)) return
+          incomingMessageIdsRef.current.add(incomingId)
+          setTimeout(() => incomingMessageIdsRef.current.delete(incomingId), 5000)
+
           const { data } = await supabase
             .from('messages')
             .select(`
@@ -70,12 +103,14 @@ export default function ChatPage() {
                 )
               )
             `)
-            .eq('id', (payload.new as any).id)
+            .eq('id', incomingId)
             .single()
 
           if (data) {
+            const isFromOther = (data as any).sender_id !== currentUser?.id
+            const messageToAdd = isFromOther ? { ...(data as any), is_read: true } : (data as any)
+
             setMessages((prev) => {
-              // Remove any temporary message from the same sender with similar content
               const filtered = prev.filter(m => {
                 if (m.id.toString().startsWith('temp-') && 
                     m.sender_id === (data as any).sender_id &&
@@ -84,14 +119,24 @@ export default function ChatPage() {
                 }
                 return true
               })
-              
-              // Check if the real message already exists
+
               if (filtered.some((m: any) => m.id === (data as any).id)) {
                 return filtered
               }
-              
-              return [...filtered, data as any]
+
+              return [...filtered, messageToAdd as any]
             })
+
+            if (isFromOther) {
+              // optimistic local update already done above; update DB and notify other UI
+              markMessagesAsRead(conversationId)
+                .then((res) => {
+                  if (!res?.success) console.error('Failed to mark messages as read:', res?.error)
+                  const delta = res?.count || 1
+                  window.dispatchEvent(new CustomEvent('bb:messages-read', { detail: { conversationId, unreadCount: delta } }))
+                })
+                .catch((err) => console.error('markMessagesAsRead threw:', err))
+            }
           }
         }
       )
@@ -110,9 +155,11 @@ export default function ChatPage() {
       .subscribe()
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisibility)
       supabase.removeChannel(channel)
     }
-  }, [conversationId])
+  }, [conversationId, currentUser?.id])
 
   useEffect(() => {
     scrollToBottom()
@@ -161,6 +208,29 @@ export default function ChatPage() {
       // Load messages
       const messagesData = await getMessages(conversationId)
       setMessages(messagesData)
+
+      // Optimistically mark any unread messages (from the other user) as read locally,
+      // then update the DB and notify other UI so badges clear instantly.
+      const unreadToMark = (messagesData || []).filter((m: any) => !m.is_read && m.sender_id !== currentProfile?.id).length
+
+      if (unreadToMark > 0) {
+        // local state first so UI updates immediately
+        setMessages(prev => prev.map((m: any) =>
+          (m.conversation_id === conversationId && m.sender_id !== currentProfile?.id)
+            ? { ...m, is_read: true }
+            : m
+        ))
+
+        // mark in DB (don't block UI) — prefer passing profile id so update isn't missed
+        markMessagesAsRead(conversationId, currentProfile?.id)
+          .then((res) => {
+            if (!res?.success) console.error('Failed to mark messages as read:', res?.error)
+          })
+          .catch((err) => console.error('markMessagesAsRead threw:', err))
+
+        // let other parts of the app (conversation list / layout) update instantly
+        window.dispatchEvent(new CustomEvent('bb:messages-read', { detail: { conversationId, unreadCount: unreadToMark } }))
+      }
     } catch (error) {
       console.error('Error loading chat:', error)
       toast.error('Failed to load chat')

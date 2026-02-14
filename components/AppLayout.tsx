@@ -91,8 +91,17 @@ export function AppLayout({ children, username }: AppLayoutProps) {
           table: 'messages',
         },
         (payload) => {
-          console.log('Message change detected:', payload)
+          // keep unread top-bar counter accurate
           fetchUnreadCount()
+
+          // emit a lightweight client event so other mounted UI (e.g. Messages list)
+          // can update immediately without depending on being on /messages
+          console.debug('AppLayout unread-messages-app payload:', payload?.eventType, 'id=', (payload?.new as any)?.id, 'sender=', (payload?.new as any)?.sender_id)
+          try {
+            window.dispatchEvent(new CustomEvent('bb:message-inserted', { detail: payload }))
+          } catch (e) {
+            /* ignore in non-browser env */
+          }
         }
       )
       .subscribe()
@@ -183,12 +192,21 @@ export function AppLayout({ children, username }: AppLayoutProps) {
     window.addEventListener('bb:checkin-completed', onCompleted)
     window.addEventListener('bb:checkin-uncompleted', onUncompleted)
 
+    // Optimistic UI: decrements top-level unread counter immediately when conversation is read
+    const onMessagesRead = (e: any) => {
+      const unreadDelta = e?.detail?.unreadCount || 0
+      if (!unreadDelta) return
+      setUnreadCount(prev => Math.max(prev - unreadDelta, 0))
+    }
+    window.addEventListener('bb:messages-read', onMessagesRead)
+
     return () => {
       supabase.removeChannel(messagesChannel)
       supabase.removeChannel(notifsChannel)
       supabase.removeChannel(checkinChannel)
       window.removeEventListener('bb:checkin-completed', onCompleted)
       window.removeEventListener('bb:checkin-uncompleted', onUncompleted)
+      window.removeEventListener('bb:messages-read', onMessagesRead)
     }
   }, [userId])
 
